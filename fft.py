@@ -5,7 +5,9 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import plotly.offline
 
-from signals import epochingTool
+import sys
+sys.path.append("E:\\LCCN_Local\PycharmProjects\\")
+from toolbox.signals import epochingTool
 
 
 # FFT
@@ -147,7 +149,7 @@ def PSDplot(signals, samplingFreq, regionLabels, folder="figures", title=None, m
 
 
 def FFTplot(signals, simLength, regionLabels, folder="figures", title=None, mode="html", max_hz=80, min_hz=1,
-            type="log"):
+            type="log", auto_open=True):
 
     fig = go.Figure(layout=dict(title=title, xaxis=dict(title='Frequency', type=type), yaxis=dict(title='Module', type=type)))
 
@@ -162,14 +164,14 @@ def FFTplot(signals, simLength, regionLabels, folder="figures", title=None, mode
         fig.add_scatter(x=freqs[int(cut_low):int(cut_high)], y=fft[int(cut_low):int(cut_high)], name=regionLabels[i])
 
     if mode == "html":
-        pio.write_html(fig, file=folder + "/FFT_" + title + ".html", auto_open=True)
+        pio.write_html(fig, file=folder + "/FFT_" + title + ".html", auto_open=auto_open)
     elif mode == "png":
         pio.write_image(fig, file=folder + "/FFT_" + str(time.time()) + ".png", engine="kaleido")
     elif mode == "inline":
         plotly.offline.iplot(fig)
 
 
-def FFTpeaks(signals, simLength):
+def FFTpeaks(signals, simLength, IAF=None, curves=False):
     if signals.ndim != 2:
         print("Array should be an array with shape: channels x timepoints.")
 
@@ -183,13 +185,20 @@ def FFTpeaks(signals, simLength):
             freqs = np.arange(len(signals[i]) / 2)
             freqs = freqs / (simLength / 1000)  # simLength (ms) / 1000 -> segs
 
-            fft = fft[freqs > 0.5]  # remove undesired frequencies from peak analisis
+            fft = fft[freqs > 0.5]  # remove undesired frequencies from peak analysis
             freqs = freqs[freqs > 0.5]
+            if not IAF:
+                IAF = freqs[np.where(fft == max(fft))][0]
 
-            IAF = freqs[np.where(fft == max(fft))][0]
-            peaks.append(IAF)
+            # Guided by max fft
+            peaks.append(freqs[np.where(fft == max(fft))][0])
             modules.append(fft[np.where(fft == max(fft))][0])
-            band_modules.append(scipy.integrate.simpson(fft[(IAF-2 < freqs) & (freqs < IAF+2)]))  # Alpha band integral
 
-    return np.asarray(peaks), np.asarray(modules), np.asarray(band_modules)
+            # Guided by IAF
+            band_modules.append(scipy.integrate.simpson(fft[(IAF-2 < freqs) & (freqs < IAF+2)]))  # Alpha band integral
+    if curves:
+        return np.asarray(peaks), np.asarray(modules), np.asarray(band_modules), fft, freqs
+
+    else:
+        return np.asarray(peaks), np.asarray(modules), np.asarray(band_modules)
 

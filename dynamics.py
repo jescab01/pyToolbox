@@ -1,4 +1,6 @@
+
 import os
+import time
 
 import numpy as np
 import scipy.signal
@@ -6,16 +8,24 @@ import scipy.signal
 from mne import filter
 import plotly.graph_objects as go  # for data visualisation
 import plotly.io as pio
+import plotly.offline
 
-from fc import PLV, AEC
-from signals import epochingTool
+import sys
+sys.path.append("E:\\LCCN_Local\\PycharmProjects\\")
+from toolbox.signals import epochingTool
+from toolbox.fc import PLV, AEC
+
 
 
 ###### Sliding Window Approach
-def dynamic_fc(data, samplingFreq, window, step, measure="PLV", plot="OFF", folder='figures', lowcut=8, highcut=12, filtered=True, auto_open=False, verbose=False):
-    '''
+def dynamic_fc(data, samplingFreq, transient, window, step, measure="PLV", plot=None, folder='figures',
+               lowcut=8, highcut=12, filtered=True, auto_open=False, verbose=False):
+    """
     Calculates dynamical Functional Connectivity using the classical method of sliding windows.
 
+    REFERENCE || Cabral et al. (2017) Functional connectivity dynamically evolves on multiple time-scales over a
+    static structural connectome: Models and mechanisms
+    
     :param data: Signals in shape [ROIS x time]
     :param samplingFreq: sampling frequency (Hz)
     :param window: Seconds of sliding window
@@ -24,8 +34,9 @@ def dynamic_fc(data, samplingFreq, window, step, measure="PLV", plot="OFF", fold
     :param plot: Plot dFC matrix?
     :param folder: To save figures output
     :param auto_open: on browser.
-    :return:
-    '''
+    :return: dFC matrix
+    """
+    
     window_ = window * 1000
     step_ = step * 1000
 
@@ -35,9 +46,9 @@ def dynamic_fc(data, samplingFreq, window, step, measure="PLV", plot="OFF", fold
         else:
             # Band-pass filtering
             filterSignals = filter.filter_data(data, samplingFreq, lowcut, highcut, verbose=verbose)
+        if verbose:
+            print("Calculating dFC matrix...")
 
-
-        print("Calculating dFC matrix...")
         matrices_fc = list()
         for w in np.arange(0, (len(data[0])) - window_, step_, 'int'):
 
@@ -50,7 +61,7 @@ def dynamic_fc(data, samplingFreq, window, step, measure="PLV", plot="OFF", fold
             if window_ >= 4000:
                 efSignals = epochingTool(signals, 4, samplingFreq, "signals", verbose=verbose)
             else:
-                efSignals = epochingTool(signals, window_//1000, samplingFreq, "signals")
+                efSignals = epochingTool(signals, window_//1000, samplingFreq, "signals", verbose=verbose)
 
             # Obtain Analytical signal
             efPhase = list()
@@ -79,13 +90,23 @@ def dynamic_fc(data, samplingFreq, window, step, measure="PLV", plot="OFF", fold
                 dFC_matrix[t1, t2] = np.corrcoef(matrices_fc[t1][np.triu_indices(len(matrices_fc[0]), 1)],
                                                  matrices_fc[t2][np.triu_indices(len(matrices_fc[0]), 1)])[1, 0]
 
-        if plot == "ON":
-            fig = go.Figure(data=go.Heatmap(z=dFC_matrix, x=np.arange(0, len(data[0]), step), y=np.arange(0, len(data[0]), step_),
-                                            colorscale='Viridis'))
-            fig.update_layout(title='Functional Connectivity Dynamics')
+        if plot:
+            fig = go.Figure(data=go.Heatmap(z=dFC_matrix, x=np.arange(transient, transient + len(data[0]), step_)/1000,
+                                            y=np.arange(transient, transient + len(data[0]), step_)/1000,
+                                            colorscale='Viridis', colorbar=dict(thickness=4)))
+            fig.update_layout(title='dynamical Functional Connectivity', height=400, width=400)
             fig.update_xaxes(title="Time 1 (seconds)")
             fig.update_yaxes(title="Time 2 (seconds)")
-            pio.write_html(fig, file=folder + "/PLV_" ".html", auto_open=auto_open)
+
+            if plot == "html":
+                pio.write_html(fig, file=folder + "/dPLV.html", auto_open=auto_open)
+            elif plot == "png":
+                pio.write_image(fig, file=folder + "/dPLV_" + str(time.time()) + ".png", engine="kaleido")
+            elif plot == "svg":
+                pio.write_image(fig, file=folder + "/dPLV.svg", engine="kaleido")
+            elif plot == "inline":
+                plotly.offline.iplot(fig)
+
 
         return dFC_matrix
 
@@ -95,7 +116,12 @@ def dynamic_fc(data, samplingFreq, window, step, measure="PLV", plot="OFF", fold
 
 def kuramoto_order(data, samplingFreq, lowcut=8, highcut=12, filtered=False, verbose=False):
 
-    print("Calculating Kuramoto order paramter...")
+    """
+    From Deco et al. (2017) The dynamics of resting fluctuations in the brain: metastability and its dynamical cortical core
+    "We measure the metastability as the standard deviation of the Kuramoto order parameter across time".
+    """
+    if verbose:
+        print("Calculating Kuramoto order paramter...")
     if filtered:
         filterSignals=data
 
@@ -118,7 +144,7 @@ def kuramoto_order(data, samplingFreq, lowcut=8, highcut=12, filtered=False, ver
 
 def PLE(efPhase, time_lag, pattern_size, samplingFreq, subsampling=1):
     """
-    It calculates Phase Lag Entropy on a bunch of filtered and epoched signals with shape [epoch,rois,time]
+    It calculates Phase Lag Entropy (Lee et al., 2017) on a bunch of filtered and epoched signals with shape [epoch,rois,time]
     It is based on the diversity of temporal patterns between two signals phases.
 
     A pattern S(t) is defined as:
@@ -131,6 +157,9 @@ def PLE(efPhase, time_lag, pattern_size, samplingFreq, subsampling=1):
         - p_j is the probability of the jth pattern, estimated counting the number of times each pattern
         occurs in a given epoch and
         - m is pattern size.
+
+    REFERENCE ||  Lee et al. (2017) Diversity of FC patterns is reduced during anesthesia.
+
 
     :param efPhase: Phase component of Hilbert transform (filtered in specific band and epoched)
     :param time_lag: "tau" temporal distance between elements in pattern

@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 
 
 # Signals
-def timeseriesPlot(signals, timepoints, regionLabels, folder="figures", title=None, mode="html"):
+def timeseriesPlot(signals, timepoints, regionLabels, folder="figures", title=None, mode="html", auto_open=True):
     fig = go.Figure(layout=dict(title=title, xaxis=dict(title='time (ms)'), yaxis=dict(title='Voltage')))
     for ch in range(len(signals)):
         fig.add_scatter(x=timepoints, y=signals[ch], name=regionLabels[ch])
@@ -19,7 +19,7 @@ def timeseriesPlot(signals, timepoints, regionLabels, folder="figures", title=No
         title = "TimeSeries"
 
     if mode == "html":
-        pio.write_html(fig, file=folder + "/" + title + ".html", auto_open=True)
+        pio.write_html(fig, file=folder + "/" + title + ".html", auto_open=auto_open)
     elif mode == "png":
         pio.write_image(fig, file=folder + "/TimeSeries_" + str(time.time()) + ".png", engine="kaleido")
     elif mode == "inline":

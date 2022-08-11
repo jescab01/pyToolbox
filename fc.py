@@ -4,7 +4,7 @@ from collections import Counter
 import numpy as np
 import plotly.graph_objects as go  # for data visualisation
 import plotly.io as pio
-
+import plotly.offline
 
 def CORR(signals, regionLabels, plot="OFF"):
     """
@@ -31,15 +31,17 @@ def CORR(signals, regionLabels, plot="OFF"):
     return CORR
 
 
-def PLV(efPhase, regionLabels=None, folder=None, subject="", plot="OFF", auto_open=False):
+def PLV(efPhase, regionLabels=None, folder=None, plot=None, verbose=True, auto_open=False):
     tic = time.time()
     try:
         efPhase[0][0][0]  # Test whether signals have been epoched
         PLV = np.ndarray((len(efPhase[0]), len(efPhase[0])))
 
-        print("Calculating PLV", end="")
+        if verbose:
+            print("Calculating PLV", end="")
         for channel1 in range(len(efPhase[0])):
-            print(".", end="")
+            if verbose:
+                print(".", end="")
             for channel2 in range(len(efPhase[0])):
                 plv_values = list()
                 for epoch in range(len(efPhase)):
@@ -48,11 +50,22 @@ def PLV(efPhase, regionLabels=None, folder=None, subject="", plot="OFF", auto_op
                     plv_values.append(value)
                 PLV[channel1, channel2] = np.average(plv_values)
 
-        if plot == "ON":
-            fig = go.Figure(data=go.Heatmap(z=PLV, x=regionLabels, y=regionLabels, colorscale='Viridis'))
-            fig.update_layout(title='Phase Locking Value')
-            pio.write_html(fig, file=folder + "/PLV_" + subject + ".html", auto_open=auto_open)
-        print("%0.3f seconds.\n" % (time.time() - tic,))
+        if plot:
+            fig = go.Figure(data=go.Heatmap(z=PLV, x=regionLabels, y=regionLabels,
+                                            colorbar=dict(thickness=4), colorscale='Viridis'))
+            fig.update_layout(title='Phase Locking Value', height=500, width=500)
+
+            if plot == "html":
+                pio.write_html(fig, file=folder + "/PLV.html", auto_open=auto_open)
+            elif plot == "png":
+                pio.write_image(fig, file=folder + "/PLV_" + str(time.time()) + ".png", engine="kaleido")
+            elif plot == "svg":
+                pio.write_image(fig, file=folder + "/PLV.svg", engine="kaleido")
+            elif plot == "inline":
+                plotly.offline.iplot(fig)
+
+        if verbose:
+            print("%0.3f seconds.\n" % (time.time() - tic,))
         return PLV
 
     except IndexError:
