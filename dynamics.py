@@ -19,7 +19,7 @@ from toolbox.fc import PLV, AEC
 
 ###### Sliding Window Approach
 def dynamic_fc(data, samplingFreq, transient, window, step, measure="PLV", plot=None, folder='figures',
-               lowcut=8, highcut=12, filtered=True, auto_open=False, verbose=False):
+               lowcut=8, highcut=12, filtered=False, auto_open=False, verbose=False, mode="dFC"):
     """
     Calculates dynamical Functional Connectivity using the classical method of sliding windows.
 
@@ -55,13 +55,7 @@ def dynamic_fc(data, samplingFreq, transient, window, step, measure="PLV", plot=
             if verbose:
                 print('%s %i / %i' % (measure, w / step_, ((len(data[0])) - window_) / step_))
 
-            signals = filterSignals[:, w:w + window_]
-
-            # EPOCHING timeseries into x seconds windows epochingTool(signals, windowlength(s), samplingFrequency(Hz))
-            if window_ >= 4000:
-                efSignals = epochingTool(signals, 4, samplingFreq, "signals", verbose=verbose)
-            else:
-                efSignals = epochingTool(signals, window_//1000, samplingFreq, "signals", verbose=verbose)
+            efSignals = filterSignals[:, w:w + window_][np.newaxis]
 
             # Obtain Analytical signal
             efPhase = list()
@@ -107,8 +101,10 @@ def dynamic_fc(data, samplingFreq, transient, window, step, measure="PLV", plot=
             elif plot == "inline":
                 plotly.offline.iplot(fig)
 
-
-        return dFC_matrix
+        if mode == "all_matrices":
+            return dFC_matrix, matrices_fc
+        else:
+            return dFC_matrix
 
     else:
         print('Error: Signal length should be longer than window length (%i sec)' % window)
