@@ -95,9 +95,17 @@ def FFTarray(signals, simLength, transient, regionLabels, param1=None, param2=No
 
 
 def PSD(signals, samplingFreq, window=4, overlap=0.5):
+    """
 
-    fft_result=[]
-    freqs_result=[]
+    :param signals: nchannels x ntimepoints
+    :param samplingFreq:
+    :param window: def=4secs
+    :param overlap: def=0.5
+    :return:
+    """
+
+    fft_result = []
+
     window_size = int(window * samplingFreq)
     step_size = int(window_size * (1 - overlap))
 
@@ -105,19 +113,35 @@ def PSD(signals, samplingFreq, window=4, overlap=0.5):
         eSignal = [roi_signal[i: i + window_size] for i in range(0, len(roi_signal) - window_size, step_size)]
         fft_vector = []
         for epoch in eSignal:
-            fft_temp = np.real(np.fft.fft(epoch))  # FFT for each channel signal
+            fft_temp = abs(np.fft.fft(epoch))  # FFT for each channel signal
             fft_temp = fft_temp[range(int(len(epoch) / 2))]  # Select just positive side of the symmetric FFT
             fft_vector.append(fft_temp)
 
         fft_result.append(np.average(fft_vector, axis=0))
     freqs = np.arange(window_size / 2)
-    freqs_result.append(freqs / window)
+    freqs = freqs / window
 
-    return fft_result, freqs_result
+    return np.asarray(fft_result), freqs
 
 
-def PSDplot(signals, samplingFreq, regionLabels, folder="figures", title=None, mode="html", max_hz=80, min_hz=1,
+def PSDplot(signals, samplingFreq, regionLabels, folder="figures", title=None, mode="html", highcut=80, lowcut=1,
             type="log", window=4, overlap=0.5):
+
+    """
+
+    :param signals:
+    :param samplingFreq:
+    :param regionLabels:
+    :param folder:
+    :param title:
+    :param mode:
+    :param max_hz:
+    :param min_hz:
+    :param type:
+    :param window:
+    :param overlap:
+    :return:
+    """
 
     fig = go.Figure(layout=dict(title=title, xaxis=dict(title='Frequency', type=type), yaxis=dict(title='Log power (dB)', type=type)))
 
@@ -136,8 +160,8 @@ def PSDplot(signals, samplingFreq, regionLabels, folder="figures", title=None, m
         freqs = np.arange(window_size / 2)
         freqs = freqs / window
 
-        cut_high = np.where(freqs >= max_hz)[0][0]  # Hz. Number of frequency points until cut at xHz point
-        cut_low = np.where(freqs >= min_hz)[0][0]
+        cut_high = np.where(freqs >= highcut)[0][0]  # Hz. Number of frequency points until cut at xHz point
+        cut_low = np.where(freqs >= lowcut)[0][0]
         fig.add_scatter(x=freqs[int(cut_low):int(cut_high)], y=fft[int(cut_low):int(cut_high)], name=regionLabels[roi])
 
     if mode == "html":
@@ -171,22 +195,35 @@ def FFTplot(signals, simLength, regionLabels, folder="figures", title=None, mode
         plotly.offline.iplot(fig)
 
 
-def FFTpeaks(signals, simLength, IAF=None, curves=False):
+def FFTpeaks(signals, simLength, transient, samplingFreq, IAF=None, curves=False, norm=False, freq_range=[0.5, 60]):
+    """
+
+    :param signals: channels x timepoints
+    :param simLength: in miliseconds
+    :param transient: if apply, discarded simulation time
+    :param samplingFreq:
+    :param IAF: to calculate IAF+/-2 band power
+    :param curves: Save curves?
+    :param norm: do you want normalized spectra?
+    :param freq_range: Exclude some frequencies from analysis?
+    :return:
+    """
+
     if signals.ndim != 2:
         print("Array should be an array with shape: channels x timepoints.")
 
     else:
-        peaks = list()
-        modules = list()
-        band_modules = list()
+        peaks, modules, band_modules, ffts, ffts_norm = [], [], [], [], []
+
         for i in range(len(signals)):
             fft = abs(np.fft.fft(signals[i]))  # FFT for each channel signal
             fft = fft[range(int(len(signals[i]) / 2))]  # Select just positive side of the symmetric FFT
             freqs = np.arange(len(signals[i]) / 2)
-            freqs = freqs / (simLength / 1000)  # simLength (ms) / 1000 -> segs
+            freqs = freqs / ((simLength - transient) / samplingFreq)  # simLength (ms) / 1000 -> segs
 
-            fft = fft[freqs > 0.5]  # remove undesired frequencies from peak analysis
-            freqs = freqs[freqs > 0.5]
+            fft = fft[(freqs > freq_range[0]) & (freqs < freq_range[1])]  # remove undesired frequencies from peak analysis
+            freqs = freqs[(freqs > freq_range[0]) & (freqs < freq_range[1])]
+
             if not IAF:
                 IAF = freqs[np.where(fft == max(fft))][0]
 
@@ -196,8 +233,20 @@ def FFTpeaks(signals, simLength, IAF=None, curves=False):
 
             # Guided by IAF
             band_modules.append(scipy.integrate.simpson(fft[(IAF-2 < freqs) & (freqs < IAF+2)]))  # Alpha band integral
-    if curves:
-        return np.asarray(peaks), np.asarray(modules), np.asarray(band_modules), fft, freqs
+
+            ffts.append(fft)
+
+            if norm:
+                # fft = fft / sum(fft)
+                fft = (fft - min(fft))/(max(fft) - min(fft))
+
+            ffts_norm.append(fft)
+
+    if curves and norm:
+        return np.asarray(peaks), np.asarray(modules), np.asarray(band_modules), np.asarray(ffts), freqs, np.asarray(ffts_norm)
+
+    elif curves:
+        return np.asarray(peaks), np.asarray(modules), np.asarray(band_modules), np.asarray(ffts), freqs
 
     else:
         return np.asarray(peaks), np.asarray(modules), np.asarray(band_modules)

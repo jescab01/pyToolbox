@@ -8,24 +8,22 @@ import plotly.offline
 from plotly.subplots import make_subplots
 import plotly.express as px
 
-def timeseries_spectra(signals, simLength, transient, regionLabels, mode="html", folder="figures",
-                       freqRange=[2,40], opacity=1, title="", auto_open=True):
+def timeseries_spectra(signals, simLength, transient, regionLabels,
+                       mode="html", timescale=None, param=None, folder="figures",
+                       freqRange=[2, 40], opacity=1, title="", auto_open=True):
 
     if "anim" in mode:
 
         fig = make_subplots(rows=1, cols=2, specs=[[{}, {}]], column_widths=[0.7, 0.3], horizontal_spacing=0.15)
         cmap = px.colors.qualitative.Plotly
 
-        shortout = signals
-        init_sim = shortout[0][0, :]
+        timepoints = np.arange(start=transient, stop=simLength, step=len(signals[0][0, :]) / (simLength - transient))
 
-        timepoints = np.arange(start=transient, stop=simLength, step=len(init_sim[0]) / (simLength - transient))
-
-        freqs = np.arange(len(init_sim[0]) / 2)
+        freqs = np.arange(len(signals[0][0, :]) / 2)
         freqs = freqs / ((simLength - transient) / 1000)  # simLength (ms) / 1000 -> segs
 
         # Plot initial traces
-        for i, signal in enumerate(init_sim):
+        for i, signal in enumerate(signals[0]):
             # Signal
             fig.add_trace(go.Scatter(x=timepoints[:8000], y=signal[:8000], name=regionLabels[i], opacity=opacity,
                                      legendgroup=regionLabels[i], marker_color=cmap[i % len(cmap)]), row=1, col=1)
@@ -42,12 +40,10 @@ def timeseries_spectra(signals, simLength, transient, regionLabels, mode="html",
 
         # Create frames
         frames, max_power = [], 0
-        for i, sim in enumerate(shortout[0]):
-            t = shortout[1][i]
-
+        for i, sim in enumerate(signals):
+            t = timescale[i]
             data = []
             for signal in sim:
-
                 # Append signal
                 data.append(go.Scatter(y=signal[:8000]))
 
@@ -67,7 +63,7 @@ def timeseries_spectra(signals, simLength, transient, regionLabels, mode="html",
         # CONTROLS : Add sliders and buttons
         fig.update_layout(
             xaxis1=dict(title="Time (ms)"), xaxis2=dict(title="Frequency (Hz)"),
-            yaxis1=dict(title="Voltage (mV)", range=[np.min(shortout[0]), np.max(shortout[0])]),
+            yaxis1=dict(title="Voltage (mV)", range=[np.min(np.asarray(signals)), np.max(np.asarray(signals))]),
             yaxis2=dict(title="Power (dB)", range=[0, max_power]),
             template="plotly_white", title=title, legend=dict(tracegroupgap=2),
             sliders=[dict(
@@ -75,9 +71,9 @@ def timeseries_spectra(signals, simLength, transient, regionLabels, mode="html",
                             args=[[str(t)], dict(mode="immediate",
                                                  frame=dict(duration=250, redraw=True, easing="cubic-in-out"),
                                                  transition=dict(duration=0))],
-                            label=str(t)) for i, t in enumerate(shortout[1])],
+                            label=str(t)) for i, t in enumerate(timescale)],
                 transition=dict(duration=0), x=0.15, xanchor="left", y=-0.15,
-                currentvalue=dict(font=dict(size=15), prefix="Time (years) - ", visible=True, xanchor="right"),
+                currentvalue=dict(font=dict(size=15), prefix=param + " - ", visible=True, xanchor="right"),
                 len=0.8, tickcolor="white")],
 
             updatemenus=[dict(type="buttons", showactive=False, y=-0.2, x=0, xanchor="left",
@@ -90,7 +86,7 @@ def timeseries_spectra(signals, simLength, transient, regionLabels, mode="html",
                                              dict(frame=dict(duration=250, redraw=False, easing="cubic-in-out"),
                                                   transition=dict(duration=0), mode="immediate")])])])
 
-        pio.write_html(fig, file=folder + "/Animated_timeseriesSpectra_" + title + ".html", auto_open=True, auto_play=False)
+        pio.write_html(fig, file=folder + "/Animated_timeseriesSpectra_" + title + ".html", auto_open=auto_open, auto_play=False)
 
 
     else:
