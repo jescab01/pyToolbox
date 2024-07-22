@@ -174,7 +174,12 @@ def kuramoto_polar(data, time_, samplingFreq, speed, lowcut=8, highcut=10, times
     KO_angle = np.angle(kuramoto_order)
 
     wraped_phase = (phases % (2 * np.pi))
-    cmap = px.colors.qualitative.Plotly + px.colors.qualitative.Light24 + px.colors.qualitative.Set2
+    cmap = (px.colors.qualitative.Plotly + px.colors.qualitative.Light24 + px.colors.qualitative.Set2 +
+            px.colors.qualitative.Dark24 + px.colors.qualitative.Set1 + px.colors.qualitative.Pastel2 +
+            px.colors.qualitative.Set3 + px.colors.qualitative.Light24 + px.colors.qualitative.Pastel1 +
+            px.colors.qualitative.Alphabet + px.colors.qualitative.Vivid + px.colors.qualitative.Antique +
+            px.colors.qualitative.Safe + px.colors.qualitative.D3 + px.colors.qualitative.Prism +
+            px.colors.qualitative.Bold + px.colors.qualitative.G10) * 50
 
     # With points
     fig = go.Figure()
@@ -221,7 +226,7 @@ def kuramoto_polar(data, time_, samplingFreq, speed, lowcut=8, highcut=10, times
                                                    mode="immediate")])])])
 
     if "html" in mode:
-        pio.write_html(fig, file=folder + "/Animated_PolarKuramoto_" + title + ".html", auto_open=auto_open,
+        pio.write_html(fig, file=folder + "/Animated_PolarKuramoto-" + title + ".html", auto_open=auto_open,
                        auto_play=False)
 
     elif "inline" in mode:
