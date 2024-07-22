@@ -5,13 +5,12 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import plotly.offline
 
-import sys
-sys.path.append("E:\\LCCN_Local\PycharmProjects\\")
 from toolbox.signals import epochingTool
 
 
 # FFT
 def multitapper(signals, samplingFreq, regionLabels, epoch_length=4, ntapper=4, smoothing=0.5, peaks=False, plot=False, folder="figures/", title="", mode="html"):
+
     # Demean data
     demean_data = signals - np.average(signals, axis=1)[:, None]
 

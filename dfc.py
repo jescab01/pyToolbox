@@ -9,6 +9,7 @@ from mne import filter
 import plotly.graph_objects as go  # for data visualisation
 import plotly.io as pio
 import plotly.offline
+import plotly.express as px
 
 import sys
 sys.path.append("E:\\LCCN_Local\\PycharmProjects\\")
@@ -125,9 +126,18 @@ def kuramoto_order(data, samplingFreq, lowcut=8, highcut=12, filtered=False, ver
         # Band-pass filtering
         filterSignals = filter.filter_data(data, samplingFreq, lowcut, highcut, verbose=verbose)
 
-    analyticalSignal = scipy.signal.hilbert(filterSignals)
+
+    # Padding as Hilbert transform has distortions at edges
+    padding = np.zeros((len(data), 1000))
+
+    filterSignals_padded = np.concatenate([padding, filterSignals, padding], axis=1)
+
+    analyticalSignal_padded = scipy.signal.hilbert(filterSignals_padded)
     # Get instantaneous phase by channel
-    efPhase = np.angle(analyticalSignal)
+    efPhase_padded = np.angle(analyticalSignal_padded)
+
+    efPhase = efPhase_padded[:, 1000:-1000]
+
 
     # Kuramoto order parameter in time
     kuramoto_array = abs(np.sum(np.exp(1j * efPhase), axis=0))/len(efPhase)
@@ -135,7 +145,87 @@ def kuramoto_order(data, samplingFreq, lowcut=8, highcut=12, filtered=False, ver
     kuramoto_avg = np.average(kuramoto_array)
     kuramoto_sd = np.std(kuramoto_array)
 
-    return kuramoto_sd, kuramoto_avg
+    return kuramoto_array, kuramoto_sd, kuramoto_avg
+
+
+def kuramoto_polar(data, time_, samplingFreq, speed, lowcut=8, highcut=10, timescale="ms",
+                   mode="html", folder="figures", title="", auto_open=True):
+
+    # Band-pass filtering
+    filterSignals = filter.filter_data(data, samplingFreq, lowcut, highcut, verbose=False)
+
+
+    # Padding as Hilbert transform has distortions at edges
+    padding = np.zeros((len(data), 1000))
+
+    filterSignals_padded = np.concatenate([padding, filterSignals, padding], axis=1)
+
+    analyticalSignal_padded = scipy.signal.hilbert(filterSignals_padded)
+    # Get instantaneous phase by channel
+    efPhase_padded = np.angle(analyticalSignal_padded)
+
+    phases = efPhase_padded[:, 1000:-1000]
+
+    phases = phases[:, ::speed]
+    time_ = time_[::speed]
+
+    kuramoto_order = [1 / len(phases) * np.sum(np.exp(1j * phases[:, i])) for i, dp in enumerate(phases[0])]
+    KO_magnitude = np.abs(kuramoto_order)
+    KO_angle = np.angle(kuramoto_order)
+
+    wraped_phase = (phases % (2 * np.pi))
+    cmap = px.colors.qualitative.Plotly + px.colors.qualitative.Light24 + px.colors.qualitative.Set2
+
+    # With points
+    fig = go.Figure()
+
+    ## Add Kuramoto Order
+    fig.add_trace(go.Scatterpolar(theta=[KO_angle[0]], r=[KO_magnitude[0]], thetaunit="radians",
+                                  name="KO", mode="markers", marker=dict(size=6, color="darkslategray")))
+
+    ## Add each region phase
+    fig.add_trace(go.Scatterpolar(theta=wraped_phase[:, 0], r=[1]*len(wraped_phase), thetaunit="radians",
+                                  name="ROIs", mode="markers", marker=dict(size=8, color=cmap), opacity=0.8))
+
+    fig.update(frames=[go.Frame(data=[go.Scatterpolar(theta=[KO_angle[i]], r=[KO_magnitude[i]]),
+                                      go.Scatterpolar(theta=wraped_phase[:, i])],
+                                traces=[0, 1], name=str(np.round(t, 3))) for i, t in enumerate(time_)])
+
+    # CONTROLS : Add sliders and buttons
+    fig.update_layout(template="plotly_white", height=400, width=500, polar=dict(angularaxis_thetaunit="radians", ),
+
+                      sliders=[dict(
+                          steps=[
+                              dict(method='animate',
+                                   args=[[str(t)], dict(mode="immediate",
+                                                        frame=dict(duration=0, redraw=True, easing="cubic-in-out"),
+                                                        transition=dict(duration=0))], label=str(np.round(t, 3))) for
+                              i, t in enumerate(time_)],
+                          transition=dict(duration=0), xanchor="left", x=0.35, y=-0.15,
+                          currentvalue=dict(font=dict(size=15, color="black"), prefix="Time (%s) - " % (timescale), visible=True,
+                                            xanchor="right"),
+                          len=0.7, tickcolor="white", font=dict(color="white"))],
+
+                      updatemenus=[
+                          dict(type="buttons", showactive=False, x=0.05, y=-0.4, xanchor="left", direction="left",
+                               buttons=[
+                                   dict(label="\u23f5", method="animate",
+                                        args=[None,
+                                              dict(frame=dict(duration=0, redraw=True, easing="cubic-in-out"),
+                                                   transition=dict(duration=0),
+                                                   fromcurrent=True, mode='immediate')]),
+                                   dict(label="\u23f8", method="animate",
+                                        args=[[None],
+                                              dict(frame=dict(duration=0, redraw=True, easing="cubic-in-out"),
+                                                   transition=dict(duration=0),
+                                                   mode="immediate")])])])
+
+    if "html" in mode:
+        pio.write_html(fig, file=folder + "/Animated_PolarKuramoto_" + title + ".html", auto_open=auto_open,
+                       auto_play=False)
+
+    elif "inline" in mode:
+        plotly.offline.iplot(fig)
 
 
 def PLE(efPhase, time_lag, pattern_size, samplingFreq, subsampling=1):
