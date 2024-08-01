@@ -1,11 +1,15 @@
+
 import time
 from collections import Counter
 from mne import filter, time_frequency
 
 import numpy as np
+import scipy
+
 import plotly.graph_objects as go  # for data visualisation
 import plotly.io as pio
 import plotly.offline
+import plotly.express as px
 
 import sys
 sys.path.append("E:\\LCCN_Local\\PycharmProjects\\")
@@ -13,13 +17,14 @@ from toolbox.signals import epochingTool
 
 
 ## Static functional connetivity
-def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None, regionLabels=None, folder=None, plot=None, verbose=True, auto_open=False):
+def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None, regionLabels=None,
+       folder=None, plot=None, verbose=False, auto_open=False):
     """
 
     """
     tic = time.time()
 
-    n_rois = len(signals[0])
+    n_rois = len(signals)
     fc_matrix = np.ndarray((n_rois, n_rois))
 
     if "CORR" in measure:
@@ -31,17 +36,17 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
         #     mean = np.mean(signals[channel, :])
         #     std = np.std(signals[channel, :])
         #     normalSignals[channel] = (signals[channel, :] - mean) / std
-        print("Calculating PLV", end="")
+        print("Calculating PLV", end="") if verbose else None
         for roi1 in range(n_rois):
-            print(".", end="")
+            print(".", end="") if verbose else None
             for roi2 in range(n_rois):
                 fc_matrix[roi1][roi2] = sum(stdSignals[roi1] * stdSignals[roi2]) / len(stdSignals[0])
 
     elif measure in ["PLV", "AEC", "PLI"]:
 
         if not ef:
-            filterSignals = filter.filter_data(data_avg, samplingFreq, lowcut, highcut, verbose=verbose)
-            efSignals = epochingTool(filterSignals, 4, samplingFreq, "signals")
+            filterSignals = filter.filter_data(signals, samplingFreq, lowcut, highcut, verbose=verbose)
+            efSignals = epochingTool(filterSignals, 4, samplingFreq, "signals", verbose=verbose)
 
             # Obtain Analytical signal
             efPhase, efEnvelope = [], []
@@ -57,14 +62,14 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
             # timeseriesPlot(raw_data, raw_time, regionLabels)
             # plotConversions(raw_data[:,:len(efSignals[0][0])], efSignals[0], efPhase[0], efEnvelope[0],bands[0][b], regionLabels, 8, raw_time)
         elif "efPhase" in ef:
-            efPhase = signals
+            efPhase = np.array(signals)[np.newaxis, :, :]
         elif "efEnvelope" in ef:
-            efEnvelope = signals
+            efEnvelope = np.array(signals)[np.newaxis, :, :]
 
         if "PLV" in measure:
-            print("Calculating PLV", end="")
+            print("Calculating PLV", end="") if verbose else None
             for roi1 in range(n_rois):
-                print(".", end="")
+                print(".", end="") if verbose else None
                 for roi2 in range(n_rois):
                     plv_values = list()
                     for epoch in range(len(efPhase)):
@@ -74,9 +79,9 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
                     fc_matrix[roi1, roi2] = np.average(plv_values)
 
         elif "AEC" in measure:
-            print("Calculating AEC", end="")
+            print("Calculating AEC", end="") if verbose else None
             for roi1 in range(n_rois):
-                print(".", end="")
+                print(".", end="") if verbose else None
                 for roi2 in range(n_rois):
                     values_aec = list()  # AEC per epoch and channel x channel
                     for epoch in range(len(efEnvelope)):  # CORR between channels by epoch
@@ -85,9 +90,9 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
                     fc_matrix[roi1, roi2] = np.average(values_aec)
 
         elif "PLI" in measure:
-            print("Calculating PLI", end="")
+            print("Calculating PLI", end="") if verbose else None
             for roi1 in range(n_rois):
-                print(".", end="")
+                print(".", end="") if verbose else None
                 for roi2 in range(n_rois):
                     pli_values = list()
                     for epoch in range(len(efPhase)):
@@ -98,9 +103,8 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
 
     else:
         print("Unkown measure. Exit")
-        exit = True
 
-    if (plot) and not exit:
+    if plot:
         fig = go.Figure(data=go.Heatmap(z=fc_matrix, x=regionLabels, y=regionLabels,
                                         colorbar=dict(thickness=4), colorscale='Viridis'))
         fig.update_layout(title='Phase Locking Value', height=500, width=500)
@@ -114,11 +118,9 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
         elif plot == "inline":
             plotly.offline.iplot(fig)
 
-    if verbose:
-        print("%0.3f seconds.\n" % (time.time() - tic,))
+    print("%0.3f seconds.\n" % (time.time() - tic,)) if verbose else None
 
-    if not exit:
-        return fc_matrix
+    return fc_matrix
 
 
 ## Dynamical functional connetivity
@@ -159,7 +161,7 @@ def dynamic_fc(data, samplingFreq, transient, window, step, measure="PLV", plot=
             if verbose:
                 print('%s %i / %i' % (measure, w / step_, ((len(data[0])) - window_) / step_))
 
-            efSignals = filterSignals[:, w:w + window_][np.newaxis]
+            efSignals = filterSignals[:, w:w + window_]
 
             # Obtain Analytical signal
             efPhase = list()
@@ -170,17 +172,15 @@ def dynamic_fc(data, samplingFreq, transient, window, step, measure="PLV", plot=
                 efPhase.append(np.unwrap(np.angle(analyticalSignal)))
                 efEnvelope.append(np.abs(analyticalSignal))
 
-            # Check point
-            # from toolbox import timeseriesPlot, plotConversions
+            # # Check point
+            # from toolbox.signals import timeseriesPlot, plotConversions
             # regionLabels = conn.region_labels
-            # # timeseriesPlot(emp_signals, raw_time, regionLabels)
-            # plotConversions(emp_signals[:,:len(efSignals[0][0])], efSignals[0], efPhase[0], efEnvelope[0], band="alpha")
+            # timeseriesPlot(data, raw_time, regionLabels)
+            # plotConversions(data[:, :len(efSignals[0])], efSignals, efPhase, efEnvelope, band="alpha", regionLabels=regionLabels)
 
-            if measure == "PLV":
-                matrices_fc.append(fc(efPhase, ef="efPhase", verbose=verbose))
+            ef = "efPhase" if measure == "PLV" else "efEnvelope"
+            matrices_fc.append(fc(efPhase, ef=ef, measure=measure, verbose=verbose))
 
-            elif measure == "AEC":
-                matrices_fc.append(fc(efEnvelope, ef="efEnvelope", verbose=verbose))
 
         dFC_matrix = np.zeros((len(matrices_fc), len(matrices_fc)))
         for t1 in range(len(matrices_fc)):
@@ -400,87 +400,3 @@ def kuramoto_polar(data, time_, samplingFreq, speed, lowcut=8, highcut=10, times
         plotly.offline.iplot(fig)
 
 
-## Fluctuations
-def ngf(data, samplingFreq, lowcut=1, highcut=60, resolution=0.25):
-
-    time_ = segments["trialdata"]["time"][0, 0][0, 0][0]
-    channels = [ch[0][0] for ch in segments["trialdata"]["label"][0, 0]]
-
-    freqs = np.arange(lowcut, highcut, resolution)
-
-
-    # epoch the data ..
-
-
-    # 1b. Select one channel to process :: channel 64 - MEG1731
-    for i, signal in enumerate(data):  # necessary?
-
-        data = trialdata[:, ch, :][:, np.newaxis, :]
-
-        # 2. Compute time-frequency with morlet wavelets
-        tfr = time_frequency.tfr_array_morlet(signal[np.newaxis, np.newaxis, :], samplingFreq, freqs, n_cycles=7, output="power", zero_mean=True)  ## n_cycles determine the length of the wavelet.
-
-        tfr = np.hstack(np.squeeze(tfr[:, :, :, 2000:-2000]))  # Remove padding from segment
-        ch_spectrum = np.average(tfr, axis=1)
-
-        # fig = go.Figure(go.Scatter(x=freqs, y=ch_spectrum))
-        # fig.show("browser")
-
-
-        # 3. Get the IAF
-        iaf = freqs[(freqs > 8) & (freqs < 12)][np.argmax(ch_spectrum[(freqs > 8) & (freqs < 12)])]
-
-        # 4. Average the power in alpha band over time
-        tfr_iaf = np.average(tfr[(iaf - 2 < freqs) & (freqs < iaf + 2), :], axis=0) / np.max(tfr)
-
-
-        # LR output: landa, constant, r2adj, pval, log_lkh, AIC, BIC
-        # LR = LinearRegression_LogLinear(tfr_iaf, plot='png', folder=folder, title=title)
-
-        # GMM output: landa, landa2, w, log_lkh, AIC, BIC
-        GMM1 = GaussianMix_LogLog(tfr_iaf, 1, plot='png', folder=folder, title=title)
-
-        GMM2 = GaussianMix_LogLog(tfr_iaf, 2, plot='png', folder=folder, title=title)
-
-
-
-    return
-
-
-def dfa():
-    #         time_ = segments["trialdata"]["time"][0, 0][0, 0][0]
-    #         channels = [ch[0][0] for ch in segments["trialdata"]["label"][0, 0]]
-    #
-    #         # 1b. Select one channel to process :: channel 64 - MEG1731
-    #         for ch, channel in enumerate(channels):
-    #
-    #             data = trialdata[:, ch, :]
-    #
-    #             data = np.hstack(data[:, 2000:-2000])
-    #             # fig = px.line(data).show("browser")
-    #
-    #
-    #             # Select a band of lags, which usually ranges from
-    #             # very small segments of data, to very long ones, as
-    #             lag = np.unique(2 * np.logspace(0.5, 3, 100).astype(int))
-    #             # Notice these must be ints, since these will segment
-    #             # the data into chucks of lag size
-    #
-    #
-    #             # Obtain the (MF)DFA
-    #             dfa_lag, dfa_fluct = MFDFA(data, lag=lag, q=2, order=1)
-    #             ## q determines what moments of the fluctuation function are being considered.
-    #             # q=2 focuses on the second moment of the fluctuation, and it is the value for standard DFA;
-    #             # q>2 focuses on larger fluctuations (more intense vehaviour) and viceversa for q<2.
-    #             ## Order refers to the polynomial order used to detrending the data. By default, order = 1.
-    #
-    #
-    #             # 2b. Is a power law relating window size and fluctuations. Therefore,
-    #             # take the logarithm to fit a regression line.
-    #             y, x = np.log(np.squeeze(dfa_fluct)), sm.add_constant(np.log(dfa_lag))
-    #             model = sm.OLS(y, x)
-    #             OLS_result = model.fit()
-    #             # model.fit().summary()
-    #
-
-    return

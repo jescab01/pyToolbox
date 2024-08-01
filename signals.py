@@ -98,9 +98,10 @@ def bandpassFIRfilter(signals, lowcut, highcut, windowtype, samplingRate, times=
 
 def plotConversions(raw_signals, filterSignals, phase, amplitude_envelope, band, regionLabels=None, n_signals=1,
                     raw_time=None):
-    for channel in range(n_signals):
 
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    for channel in range(n_signals):
 
         fig.add_scatter(x=raw_time, y=raw_signals[channel], name="Raw signal")
         fig.add_scatter(x=raw_time, y=filterSignals[channel], name="Filtered signal")
