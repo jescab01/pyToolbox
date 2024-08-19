@@ -47,7 +47,6 @@ def LogLikelihoodExp(data, landa, landa2=np.nan, w=1):
     return log_lkh
 
 
-
 def LinearRegression_LogLinear(data, skip_bins=0, plot=False, folder="figures", title="noTitle"):
 
     # 2. Extract the PDF from histogram
@@ -113,99 +112,19 @@ def LinearRegression_LogLinear(data, skip_bins=0, plot=False, folder="figures", 
     return landa, constant, r2adj, pval, llkh, AIC, BIC
 
 
-
-def GaussianMix_LogLog(data, n_components, plot=False, folder="figures", title="noTitle"):
+def GaussianMix_LogLog(data, n_components):
 
     gmm = GaussianMixture(n_components=n_components, covariance_type='full')
-
     gmm.fit(data.reshape(-1, 1))
-
-    # log_lkh = gmm.score(data.reshape(-1, 1))
-
+    # llkh = gmm.score(data.reshape(-1, 1))
 
     if n_components == 1:
-
         landa = 1/gmm.means_.flatten()[0]
-
         landa2, w = np.nan, np.nan
 
-        if plot:
-
-            hist = np.histogram(np.log(data), bins=200, density=True)
-            # px.scatter(hist[0]).show('browser')
-
-            Y, X = hist[0], (hist[1][:-1] + hist[1][1:]) / 2
-            Y, X = Y[Y > 0], X[Y > 0]
-
-            cmap = px.colors.qualitative.Plotly
-            fig = make_subplots(rows=1, cols=2)
-            fig.add_trace(go.Scatter(x=X, y=Y, name="Data", legendgroup="Data", mode="markers", marker=dict(color=cmap[0])), row=1, col=1)
-
-            pdf_unimodal = np.exp(X) * landa * np.exp(-landa * np.exp(X))
-            fig.add_trace(go.Scatter(x=X, y=pdf_unimodal, name="Model", legendgroup="Model", line=dict(color=cmap[1])), row=1, col=1)
-
-            hist = np.histogram(data, bins=200, density=True)
-            Y, X = hist[0], (hist[1][:-1] + hist[1][1:]) / 2
-            Y, X = np.log(Y[Y > 0]), X[Y > 0]
-            fig.add_trace(go.Scatter(x=X, y=Y, legendgroup="Data", showlegend=False, mode="markers", marker=dict(color=cmap[0])), row=1, col=2)
-
-            y_pred = np.log(landa) - landa * X  ## constant??
-            fig.add_trace(go.Scatter(x=X, y=y_pred, legendgroup="Model", showlegend=False, line=dict(color=cmap[1])), row=1, col=2)
-
-            fig.update_layout(title="GMM unimodal @Linear-Log",template="plotly_white", xaxis=dict(title="log(Power)"), xaxis2=dict(title="Power"),
-                              yaxis=dict(title="Likelihood"), yaxis2=dict(title="log(Likelihood)"))
-
-            if plot == "html":
-                pio.write_html(fig, file="%s/%s_gmm%i.html" % (folder, title, n_components), auto_open=True)
-
-            if plot == "png":
-                pio.write_image(fig, file="%s/%s_gmm%i.png" % (folder, title, n_components))
-
-
     elif n_components == 2:
-
         landa, landa2 = 1 / gmm.means_.flatten()
-
         w = gmm.weights_[0]
-
-        if plot:
-
-            hist = np.histogram(np.log(data), bins=200, density=True)
-            # px.scatter(hist[0]).show('browser')
-
-            Y, X = hist[0], (hist[1][:-1] + hist[1][1:]) / 2
-            Y, X = Y[Y > 0], X[Y > 0]
-
-            cmap = px.colors.qualitative.Plotly
-            fig = make_subplots(rows=1, cols=2)
-
-            fig.add_trace(go.Scatter(x=X, y=Y, name="Data", legendgroup="Data", mode="markers", marker=dict(color=cmap[0])), row=1, col=1)
-
-            pdf_bimodal = w * np.exp(X) * landa * np.exp(-landa * np.exp(X))
-            pdf_bimodal2 = (1 - w) * np.exp(X) * landa2 * np.exp(-landa2 * np.exp(X))
-            fig.add_trace(go.Scatter(x=X, y=pdf_bimodal + pdf_bimodal2, name="Model", legendgroup="Model", line=dict(color=cmap[1])), row=1, col=1)
-            # fig.add_trace(go.Scatter(x=x, y=pdf_bimodal0, name="Bimodal 0", legendgroup="bimodal0", showlegend=False,
-            #                          mode="lines", line=dict(color=cmap[2], width=2)), row=1, col=2)
-            # fig.add_trace(go.Scatter(x=x, y=pdf_bimodal1, name="Bimodal 1", legendgroup="bimodal1", showlegend=False,
-            #                          mode="lines", line=dict(color=cmap[2], width=2)), row=1, col=2)
-
-            hist = np.histogram(data, bins=200, density=True)
-            Y, X = hist[0], (hist[1][:-1] + hist[1][1:]) / 2
-            Y, X = np.log(Y[Y > 0]), X[Y > 0]
-            fig.add_trace(go.Scatter(x=X, y=Y, legendgroup="Data", showlegend=False, mode="markers", marker=dict(color=cmap[0])), row=1, col=2)
-
-            y_pred = w * landa * np.exp(-landa * X)  # predicting values of the exponential PDFs in linear space; then converting to log.
-            y_pred2 = (1-w) * landa2 * np.exp(-landa2 * X)
-            fig.add_trace(go.Scatter(x=X, y=np.log(y_pred+y_pred2), legendgroup="Model", showlegend=False, line=dict(color=cmap[1])), row=1, col=2)
-
-            fig.update_layout(title="GMM bimodal @Linear-Log",template="plotly_white", xaxis2=dict(title="Power"), xaxis1=dict(title="log(Power)"),
-                              yaxis2=dict(title="log(Likelihood)"), yaxis1=dict(title="Likelihood"))
-
-            if plot == "html":
-                pio.write_html(fig, file="%s/%s_gmm%i.html" % (folder, title, n_components), auto_open=True)
-
-            if plot == "png":
-                pio.write_image(fig, file="%s/%s_gmm%i.png" % (folder, title, n_components))
 
     llkh = LogLikelihoodExp(data, landa, landa2, w)
 
@@ -216,27 +135,107 @@ def GaussianMix_LogLog(data, n_components, plot=False, folder="figures", title="
     return landa, landa2, w,  llkh, AIC, BIC
 
 
+def ngf_gmmfit_plot(data, gmms, pick=None, folder="figures", title="noTitle", mode="html"):
+
+    cmap = px.colors.qualitative.Plotly
+
+    fig = make_subplots(rows=2, cols=3, row_heights=[0.75, 0.25],
+                        specs=[[{}, {}, {}], [{"colspan": 3}, {}, {}]])
+
+    ## 1 Raw data -
+    # 1a. Power in time
+    fig.add_trace(go.Scatter(x=np.arange(0, len(data), 1), y=data, showlegend=False, line=dict(color="dimgray")), row=2, col=1)
+
+    # 1b. Histograms :: LinearLinear
+    hist = np.histogram(data, bins=200, density=True)
+    Y, X = hist[0], (hist[1][:-1] + hist[1][1:]) / 2
+    Y_, X_ = Y[Y > 0], X[Y > 0]
+
+    hover = ["bin=" + str((round(low, 5), round(hist[1][i+1], 5))) for i, low in enumerate(hist[1][:-1])]
+
+    fig.add_trace(go.Scatter(x=X_, y=Y_, name="Data", legendgroup="Data", showlegend=True, hovertext=hover,
+                             mode="markers", marker=dict(color="gray", opacity=0.5)), row=1, col=1)
+
+    # 1c. Histograms :: LogLinear
+    Y_ = np.log(Y[Y > 0])
+    fig.add_trace(go.Scatter(x=X_, y=Y_, legendgroup="Data", showlegend=False, hovertext=hover,
+                             mode="markers", marker=dict(color="gray", opacity=0.5)), row=1, col=2)
+
+
+    # 1d. Histograms :: LinearLog
+    hist = np.histogram(np.log(data), bins=200, density=True)
+    # px.scatter(hist[0]).show('browser')
+
+    Y, Xlog = hist[0], (hist[1][:-1] + hist[1][1:]) / 2
+    Y_, Xlog_ = Y[Y > 0], Xlog[Y > 0]
+
+    hover = ["bin=" + str((round(low, 5), round(hist[1][i+1], 5))) for i, low in enumerate(hist[1][:-1])]
+
+    fig.add_trace(go.Scatter(x=Xlog_, y=Y_, showlegend=False, hovertext=hover,
+                             mode="markers", marker=dict(color="gray", opacity=0.5)), row=1, col=3)
+
+    ## 2 PDFs from GMMs fit
+    for c, (landa, landa2, w, llkh, AIC, BIC) in enumerate(gmms):
+
+        if np.isnan(w):
+            name = "GMM1 :: lambda%0.2f - llkh%0.2f" % (landa, llkh)
+            lg = "gmm1"
+
+            pdf_LinearLinear = landa * np.exp(-landa * X)
+
+            pdf_LinearLog = np.log(landa) - landa * X  ## constant??
+
+            pdf_LogLinear = np.exp(Xlog) * landa * np.exp(-landa * np.exp(Xlog))
+
+        else:
+            name = "GMM2 :: lambda%0.2f, lambda%0.2f, w%0.2f - llkh%0.2f" % (landa, landa2, w, llkh)
+            lg = "gmm2"
+
+            y_pred1 = w * landa * np.exp(-landa * X)  # predicting values of the exponential PDFs in linear space; then converting to log.
+            y_pred2 = (1 - w) * landa2 * np.exp(-landa2 * X)
+            pdf_LinearLog = np.log(y_pred1 + y_pred2)
+
+            pdf1 = w * np.exp(Xlog) * landa * np.exp(-landa * np.exp(Xlog))
+            pdf2 = (1 - w) * np.exp(Xlog) * landa2 * np.exp(-landa2 * np.exp(Xlog))
+            pdf_LogLinear = pdf1 + pdf2
+
+        fig.add_trace(go.Scatter(x=X, y=pdf_LinearLog, name=name, legendgroup=lg, line=dict(color=cmap[c])), row=1, col=2)
+
+        fig.add_trace(go.Scatter(x=Xlog, y=pdf_LogLinear, legendgroup=lg, showlegend=False, line=dict(color=cmap[c])), row=1, col=3)
+
+
+    fig.update_layout(title="ROI%i   .  Time-Frequency @IAF+/-2.<br>Probability distributions of power and Gaussian Mixure Models fits for lambda." % pick,
+                      template="plotly_white", legend=dict(y=1.17, x=0.65),
+                      xaxis1=dict(title="Power"), xaxis2=dict(title="Power"), xaxis3=dict(title="log(Power)"), xaxis4=dict(title="Time (ms)"),
+                      yaxis1=dict(title="Likelihood"), yaxis2=dict(title="log(Likelihood)"), yaxis3=dict(title="Likelihood"), yaxis4=dict(title="Power"))
+
+    if mode == "html":
+        pio.write_html(fig, file="%s/%s_roi%i_gmms.html" % (folder, title, pick), auto_open=True)
+
+    if mode == "png":
+        pio.write_image(fig, file="%s/%s_roi%i_gmms.png" % (folder, title, pick))
+
 
 def ngf(data, samplingFreq, picks=None, lowcut=1, highcut=60, resolution=0.25, plot=False, folder="figures", title="test"):
 
     if not picks:
         picks = np.arange(0, len(data), 1).tolist()
 
-    data = data[picks, :]
-
-    eSignals = epochingTool(data, 4, samplingFreq, "signals")
-
     freqs = np.arange(lowcut, highcut, resolution)
-
-    # 2. Compute time-frequency with morlet wavelets. Output (trials, rois, freqs, time)
-    tfr = tfr_array_morlet(eSignals, samplingFreq, freqs, n_cycles=7,
-                           output="power", zero_mean=True)  ## n_cycles determine the length of the wavelet.
 
     result = []
     for p, pick in enumerate(picks):
 
-        # Select one source, remove padding from segment and re-concatenate
-        tfr_s = np.hstack(tfr[:, p, :, :])  # use only one source per roi
+        data_pick = data[pick, :][np.newaxis, np.newaxis]
+
+        # 2. Compute time-frequency with morlet wavelets. Output (trials, rois, freqs, time)
+        tfr = tfr_array_morlet(data_pick, samplingFreq, freqs, n_cycles=7,
+                               output="power", zero_mean=True)  ## n_cycles determine the length of the wavelet.
+
+        # go.Figure(go.Heatmap(x=np.arange(tfr.shape[1]), y=freqs, z=tfr[0, 0, :, 4000:-500])).show("browser")
+
+        # Select one source, remove extremes for window artifacts
+        tfr_s = tfr[0, 0, :, 500:-500]
 
         # CHECK
         # fig = go.Figure(go.Heatmap(z=tfr1[0,:, :40000], x=np.arange(0,40000,1), y=freqs)).show("browser")
@@ -252,16 +251,18 @@ def ngf(data, samplingFreq, picks=None, lowcut=1, highcut=60, resolution=0.25, p
         # LR = LinearRegression_LogLinear(tfr_iaf, plot='png', folder=folder, title=title)
 
         # GMM output: landa, landa2, w, log_lkh, AIC, BIC
-        GMM1 = GaussianMix_LogLog(tfr_iaf, 1, plot=plot, folder=folder, title=title)
-        GMM2 = GaussianMix_LogLog(tfr_iaf, 2, plot=plot, folder=folder, title=title)
+        GMMs = [GaussianMix_LogLog(tfr_iaf, n_components=n+1) for n in range(2)]
 
-        result.append([pick, GMM1, GMM2])
+        # Plot
+        if plot:
+            ngf_gmmfit_plot(tfr_iaf, GMMs, picks[p], folder=folder, title=title, mode=plot)
+
+        result.append([pick, GMMs[0], GMMs[1]])
 
     return result
 
 
-
-def dfa(data, picks=None):
+def dfa(data, picks=None, plot=False, folder="figures", title="test"):
 
     if not picks:
         picks = np.arange(0, len(data), 1).tolist()
@@ -295,5 +296,22 @@ def dfa(data, picks=None):
 
         # pick, OLS.coef, OLS.constant, OLS.r2, OLS.pval
         result.append([pick, OLS_result.params[1], OLS_result.params[0], OLS_result.rsquared_adj, OLS_result.f_pvalue])
+
+        if plot:
+
+            fig = go.Figure(go.Scatter(x=np.log(dfa_lag), y=np.log(np.squeeze(dfa_fluct)), name="Data", mode="markers"))
+
+            y_predict = OLS_result.predict(x)
+            fig.add_trace(go.Scatter(x=np.log(dfa_lag), y=y_predict, name="OLS"))
+
+            fig.update_layout(template="plotly_white", height=500, width=600,
+                              title="OLS :: coef=%0.2f - r2=%0.2f - pval=%0.2e" % (OLS_result.params[1], OLS_result.rsquared_adj, OLS_result.f_pvalue),
+                              xaxis=dict(title="log(window size)"), yaxis=dict(title="log(dfa)"))
+
+            if plot == "html":
+                pio.write_html(fig, file="%s/%s_dfa.html" % (folder, title), auto_open=True)
+
+            if plot == "png":
+                pio.write_image(fig, file="%s/%s_dfa.png" % (folder, title))
 
     return result
