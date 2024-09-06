@@ -37,8 +37,8 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
         #     std = np.std(signals[channel, :])
         #     normalSignals[channel] = (signals[channel, :] - mean) / std
         print("Calculating PLV", end="") if verbose else None
-        for roi1 in range(n_rois):
-            print(".", end="") if verbose else None
+        for r1, roi1 in enumerate(range(n_rois)):
+            print(" . . . %0.2f %%" % ((r1+1)/n_rois), end="\r") if verbose else None
             for roi2 in range(n_rois):
                 fc_matrix[roi1][roi2] = sum(stdSignals[roi1] * stdSignals[roi2]) / len(stdSignals[0])
 
@@ -57,7 +57,7 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
                 efEnvelope.append(np.abs(analyticalSignal))
 
             # Check point
-            # from pyToolbox import timeseriesPlot, plotConversions
+            # from toolbox import timeseriesPlot, plotConversions
             # regionLabels = conn.region_labels
             # timeseriesPlot(raw_data, raw_time, regionLabels)
             # plotConversions(raw_data[:,:len(efSignals[0][0])], efSignals[0], efPhase[0], efEnvelope[0],bands[0][b], regionLabels, 8, raw_time)
@@ -68,8 +68,8 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
 
         if "PLV" in measure:
             print("Calculating PLV", end="") if verbose else None
-            for roi1 in range(n_rois):
-                print(".", end="") if verbose else None
+            for r1, roi1 in enumerate(range(n_rois)):
+                print(" . . . %0.2f %%" % ((r1 + 1) / n_rois), end="\r") if verbose else None
                 for roi2 in range(n_rois):
                     plv_values = list()
                     for epoch in range(len(efPhase)):
@@ -80,8 +80,8 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
 
         elif "AEC" in measure:
             print("Calculating AEC", end="") if verbose else None
-            for roi1 in range(n_rois):
-                print(".", end="") if verbose else None
+            for r1, roi1 in enumerate(range(n_rois)):
+                print(" . . . %0.2f %%" % ((r1 + 1) / n_rois), end="\r") if verbose else None
                 for roi2 in range(n_rois):
                     values_aec = list()  # AEC per epoch and channel x channel
                     for epoch in range(len(efEnvelope)):  # CORR between channels by epoch
@@ -91,8 +91,8 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
 
         elif "PLI" in measure:
             print("Calculating PLI", end="") if verbose else None
-            for roi1 in range(n_rois):
-                print(".", end="") if verbose else None
+            for r1, roi1 in enumerate(range(n_rois)):
+                print(" . . . %0.2f %%" % ((r1 + 1) / n_rois), end="\r") if verbose else None
                 for roi2 in range(n_rois):
                     pli_values = list()
                     for epoch in range(len(efPhase)):
@@ -118,7 +118,7 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
         elif plot == "inline":
             plotly.offline.iplot(fig)
 
-    print("%0.3f seconds.\n" % (time.time() - tic,)) if verbose else None
+    print("  -  %0.3f seconds.\n" % (time.time() - tic,)) if verbose else None
 
     return fc_matrix
 
@@ -173,7 +173,7 @@ def dynamic_fc(data, samplingFreq, transient, window, step, measure="PLV", plot=
                 efEnvelope.append(np.abs(analyticalSignal))
 
             # # Check point
-            # from pyToolbox.signals import timeseriesPlot, plotConversions
+            # from toolbox.signals import timeseriesPlot, plotConversions
             # regionLabels = conn.region_labels
             # timeseriesPlot(data, raw_time, regionLabels)
             # plotConversions(data[:, :len(efSignals[0])], efSignals, efPhase, efEnvelope, band="alpha", regionLabels=regionLabels)

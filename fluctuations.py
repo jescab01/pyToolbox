@@ -21,7 +21,7 @@ import plotly.express as px
 
 import sys
 sys.path.append("E:\\LCCN_Local\\PycharmProjects\\")
-from toolbox.signals import epochingTool
+from pyToolbox.signals import epochingTool
 
 
 """
@@ -283,7 +283,7 @@ def dfa(data, picks=None, plot=False, folder="figures", title="test"):
         dfa_lag, dfa_fluct = MFDFA(data[pick, :], lag=lag, q=2, order=1)
         ## q determines what moments of the fluctuation function are being considered.
         # q=2 focuses on the second moment of the fluctuation, and it is the value for standard DFA;
-        # q>2 focuses on larger fluctuations (more intense vehaviour) and viceversa for q<2.
+        # q>2 focuses on larger fluctuations (more intense behaviour) and viceversa for q<2.
         ## Order refers to the polynomial order used to detrending the data. By default, order = 1.
 
 

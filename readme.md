@@ -3,7 +3,7 @@ Set of Python functions created ad-hoc to analyze and plot simulated brain signa
 
 Main scripts contain functions to analyze functional connectivity, dynamical functional connectivity, spectral analysis and to manipulate and plot simulated brain signals. 
 
-**(dynamical) Functional Connectivity (dynamics):** FC (PLV, AEC, CORR, PLI), dFC - Sliding Window approach, Kuramoto order, Phase Lag Entropy (PLE)
+**(dynamical) Functional Connectivity (fc):** FC (PLV, AEC, CORR, PLI), dFC - Sliding Window approach, Kuramoto order, Phase Lag Entropy (PLE)
 
 **Spectral analysis (fft):** multitapper, FFT, PSD; and extensions for extracting peaks and plotting
 
