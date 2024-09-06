@@ -1,5 +1,5 @@
-# toolbox
-Set of functions created ad-hoc to analize and plot simulated brain signals. 
+# python Toolbox
+Set of python functions created ad-hoc to analyze and plot simulated brain signals. 
 
 Main scripts contain functions to analyze functional connectivity, dynamical functional connectivity, spectral analysis and to manipulate and plot simulated brain signals. 
 
