@@ -13,7 +13,7 @@ import plotly.express as px
 
 import sys
 sys.path.append("E:\\LCCN_Local\\PycharmProjects\\")
-from toolbox.signals import epochingTool
+from pyToolbox.signals import epochingTool
 
 
 ## Static functional connetivity
@@ -57,7 +57,7 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
                 efEnvelope.append(np.abs(analyticalSignal))
 
             # Check point
-            # from toolbox import timeseriesPlot, plotConversions
+            # from pyToolbox import timeseriesPlot, plotConversions
             # regionLabels = conn.region_labels
             # timeseriesPlot(raw_data, raw_time, regionLabels)
             # plotConversions(raw_data[:,:len(efSignals[0][0])], efSignals[0], efPhase[0], efEnvelope[0],bands[0][b], regionLabels, 8, raw_time)
@@ -173,7 +173,7 @@ def dynamic_fc(data, samplingFreq, transient, window, step, measure="PLV", plot=
                 efEnvelope.append(np.abs(analyticalSignal))
 
             # # Check point
-            # from toolbox.signals import timeseriesPlot, plotConversions
+            # from pyToolbox.signals import timeseriesPlot, plotConversions
             # regionLabels = conn.region_labels
             # timeseriesPlot(data, raw_time, regionLabels)
             # plotConversions(data[:, :len(efSignals[0])], efSignals, efPhase, efEnvelope, band="alpha", regionLabels=regionLabels)
