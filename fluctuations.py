@@ -42,7 +42,7 @@ def LogLikelihoodExp(data, landa, landa2=np.nan, w=1):
     else:
         pdf_values = landa * np.exp(-landa * data)
 
-    log_lkh = np.sum(np.log(pdf_values)) / len(data)
+    log_lkh = np.sum(np.log(pdf_values))
 
     return log_lkh
 
