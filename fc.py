@@ -1,10 +1,13 @@
 
 import time
+import math
+
 from collections import Counter
 from mne import filter, time_frequency
+# import mne_connectivity
 
 import numpy as np
-import scipy
+from scipy import signal, fft
 
 import plotly.graph_objects as go  # for data visualisation
 import plotly.io as pio
@@ -14,6 +17,7 @@ import plotly.express as px
 import sys
 sys.path.append("E:\\LCCN_Local\\PycharmProjects\\")
 from pyToolbox.signals import epochingTool
+from pyToolbox import mnetools
 
 
 ## Static functional connetivity
@@ -51,7 +55,7 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
             # Obtain Analytical signal
             efPhase, efEnvelope = [], []
             for i in range(len(efSignals)):
-                analyticalSignal = scipy.signal.hilbert(efSignals[i])
+                analyticalSignal = signal.hilbert(efSignals[i])
                 # Get instantaneous phase and amplitude envelope by channel
                 efPhase.append(np.angle(analyticalSignal))
                 efEnvelope.append(np.abs(analyticalSignal))
@@ -112,7 +116,7 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
         if plot == "html":
             pio.write_html(fig, file=folder + "/" + measure + ".html", auto_open=auto_open)
         elif plot == "png":
-            pio.write_image(fig, file=ffolder + "/" + measure + ".png", engine="kaleido")
+            pio.write_image(fig, file=folder + "/" + measure + ".png", engine="kaleido")
         elif plot == "svg":
             pio.write_image(fig, file=folder + "/" + measure + ".svg", engine="kaleido")
         elif plot == "inline":
@@ -167,7 +171,7 @@ def dynamic_fc(data, samplingFreq, transient, window, step, measure="PLV", plot=
             efPhase = list()
             efEnvelope = list()
             for i in range(len(efSignals)):
-                analyticalSignal = scipy.signal.hilbert(efSignals[i])
+                analyticalSignal = signal.hilbert(efSignals[i])
                 # Get instantaneous phase and amplitude envelope by channel
                 efPhase.append(np.unwrap(np.angle(analyticalSignal)))
                 efEnvelope.append(np.abs(analyticalSignal))
@@ -301,7 +305,7 @@ def kuramoto_order(data, samplingFreq, lowcut=8, highcut=12, filtered=False, ver
 
     filterSignals_padded = np.concatenate([padding, filterSignals, padding], axis=1)
 
-    analyticalSignal_padded = scipy.signal.hilbert(filterSignals_padded)
+    analyticalSignal_padded = signal.hilbert(filterSignals_padded)
     # Get instantaneous phase by channel
     efPhase_padded = np.angle(analyticalSignal_padded)
 
@@ -326,7 +330,7 @@ def kuramoto_polar(data, time_, samplingFreq, speed, lowcut=8, highcut=10, times
 
     filterSignals_padded = np.concatenate([padding, filterSignals, padding], axis=1)
 
-    analyticalSignal_padded = scipy.signal.hilbert(filterSignals_padded)
+    analyticalSignal_padded = signal.hilbert(filterSignals_padded)
     # Get instantaneous phase by channel
     efPhase_padded = np.angle(analyticalSignal_padded)
 
@@ -398,5 +402,557 @@ def kuramoto_polar(data, time_, samplingFreq, speed, lowcut=8, highcut=10, times
 
     elif "inline" in mode:
         plotly.offline.iplot(fig)
+
+
+"""
+Following functions were created on Tue Feb  7 13:29:32 2023
+@author: Ricardo Bruña
+
+Efficient implmentation of PLV, COH and AEC, with source leakage corrected versions.
+
+
+Edited on 08/10/24 by @Jescab01.
+"""
+def plv(data, band=None, padding=None, average=True):
+    # Checks whether the data is a valid MNE object.
+    # For now, it only works with sensor-space data.
+    if not (isinstance(data, mnetools.mnevalid)):
+        raise TypeError('Unsupported data type.')
+
+    # Checks the input.
+    if (band is None) and np.isreal(data._data).all():
+        raise TypeError('No filter provided.')
+
+    # Makes a copy of the input to work with.
+    data = data.copy()
+
+    # Filters the data, if required.
+    if band is not None:
+
+        # Uses the provided padding, if any.
+        if padding is not None:
+            padding = padding * data.info['sfreq']
+            padding = np.floor(padding).astype(int)
+
+        # Otherwise tries to get the padding from the MNE object.
+        elif hasattr(data, 'padding'):
+            padding = data.padding * data.info['sfreq']
+            padding = np.floor(padding).astype(int)
+
+        # Otherwise assumes that the padding is the negative time.
+        else:
+            # print ( 'Assuming that padding is equal to negative time.' )
+
+            padding = data.time_as_index(0)[0]
+
+        # Defines the filter.
+        num = signal.firwin(padding, band, fs=data.info['sfreq'], window='hamming', pass_zero='bandpass')
+
+        # Filters the epoched data using Hilbert filtering.
+        data = mnetools.filtfilt(data, num=num, hilbert=True)
+
+        # Removes the padding.
+        if padding and padding > 0:
+            tmin = data.times[padding]
+            tmax = data.times[-padding]
+            data = data.crop(tmin=tmin, tmax=tmax, include_tmax=False)
+
+    # Extracts the raw data.
+    rawdata = data.get_data()
+
+    # Gets the metadata.
+    shape = rawdata.shape
+    nsamp = rawdata.shape[-1]
+    nchan = rawdata.shape[-2]
+
+    # Reshapes as repetitions x channels x samples.
+    rawdata = rawdata.reshape([-1, nchan, nsamp])
+    nrep = rawdata.shape[0]
+
+    # Normalizes the complex array.
+    tiny = np.finfo(rawdata.dtype).tiny
+    rawnorm = rawdata / (np.abs(rawdata) + tiny)
+
+    # In the current implementation, the nodes are channels.
+    nodes = data.ch_names
+    nnode = nchan
+
+    # Initializes the complex PLV matrix.
+    cplv = np.zeros((nrep, nnode, nnode), dtype=np.complex128)
+
+    # Gets the complex PLV by matrix multiplication.
+    for i in range(nrep):
+        cplv[i] = np.inner(rawnorm[i], rawnorm[i].conj()) / nsamp
+
+    # Recovers the original shape of the data.
+    cplv = cplv.reshape(shape[:-2] + (nnode, nnode))
+
+    # Calculates the PLV and its corrected imaginary counterpart.
+    plv = np.abs(cplv)
+    iplv = np.imag(cplv)
+    rplv = np.real(cplv)
+    ciplv = abs(iplv / np.sqrt(np.maximum(1 - rplv * rplv, tiny)))
+
+    # Forces the diagonal of ciPLV to 0.
+    diag = np.diag_indices(nnode)
+    ciplv[..., diag[0], diag[1]] = 0
+
+    # Flattens the connectivity matrices.
+    plv = plv.reshape((nrep, nnode * nnode))
+    ciplv = ciplv.reshape((nrep, nnode * nnode))
+
+    # Defines the upper diagonal in the flattened data.
+    triu = np.triu_indices(nnode, k=0)
+    triu = np.ravel_multi_index(triu, (nnode, nnode))
+
+    # Keeps only the upper triangular.
+    plv = plv[:, triu]
+    ciplv = ciplv[:, triu]
+
+    # # Creates the epoched connectivity objects.
+    # plv = mne_connectivity.EpochConnectivity(
+    #     data=plv,
+    #     n_nodes=nnode,
+    #     indices='symmetric',
+    #     names=nodes,
+    #     method='Temporal PLV',
+    #     n_epochs_used=nrep)
+    #
+    # ciplv = mne_connectivity.EpochConnectivity(
+    #     data=ciplv,
+    #     n_nodes=nnode,
+    #     indices='symmetric',
+    #     names=nodes,
+    #     method='Temporal ciPLV',
+    #     n_epochs_used=nrep)
+
+    # Averages the epochs connectivity, if requested.
+    if average:
+        plv = np.average(plv, axis=0)
+        ciplv = np.average(ciplv, axis=0)
+
+    # Returns the estimated connectivity.
+    return plv, ciplv
+
+
+def coh(data, band=None, padding=None, average=True, faverage=True):
+    """
+    Corrected imaginary part of coherence taken from:
+    * Ewald et al. 2012 NeuroImage 60:476-488 Eq. 19.
+    """
+
+    # Checks whether the data is a valid MNE object.
+    if not (isinstance(data, mnetools.mnevalid)):
+        raise TypeError('Unsupported data type.')
+
+    # Checks the input.
+    if band is None:
+        band = (0, np.inf)
+
+    # Makes a copy of the input to work with.
+    data = data.copy()
+
+    # Uses the provided padding, if any.
+    if padding is not None:
+        padding = padding * data.info['sfreq']
+        padding = np.floor(padding).astype(int)
+
+    # Otherwise tries to get the padding from the MNE object.
+    elif hasattr(data, 'padding'):
+        padding = data.padding * data.info['sfreq']
+        padding = np.floor(padding).astype(int)
+
+    # Otherwise assumes that the padding is the negative time.
+    else:
+        # print ( 'Assuming that padding is equal to negative time.' )
+
+        padding = data.time_as_index(0)[0]
+
+    # Removes the padding, if requried.
+    if (padding and padding > 0):
+        tmin = data.times[padding]
+        tmax = data.times[-padding]
+        data = data.crop(tmin=tmin, tmax=tmax, include_tmax=False)
+
+    # Extracts the raw data.
+    rawdata = data.get_data()
+
+    # Gets the metadata.
+    shape = rawdata.shape
+    nsamp = rawdata.shape[-1]
+    nchan = rawdata.shape[-2]
+
+    # Reshapes as repetitions x channels x samples.
+    rawdata = rawdata.reshape([-1, nchan, nsamp])
+    nrep = rawdata.shape[0]
+
+    # Gets the default window length and overlap.
+    winlen = int(nsamp / 9 * 2)
+    overlap = int(winlen / 2)
+
+    # Calculates the number of windows.
+    nwin = int((nsamp - overlap) / (winlen - overlap))
+
+    # In the current implementation, the nodes are channels.
+    nodes = data.ch_names
+    nnode = nchan
+
+    # Initialzies the windowed data matrix.
+    windata = np.zeros((nwin, nrep, nnode, winlen))
+
+    # Goes through each window.
+    for index in range(nwin):
+        # Calculates the window offset in the epoch.
+        offset = index * (winlen - overlap)
+
+        # Gets the data.
+        windata[index] = rawdata[None, ..., offset: offset + winlen]
+
+    # Applies the tapper.
+    windata = windata * signal.hamming(winlen)
+
+    # Calculates the size of the Fourier transform.
+    nfft = int(2 ** np.ceil(np.log2(winlen)))
+    nfft = np.max((nfft, 256))
+
+    # Calculates the Fourier transform of the data.
+    fdata = fft.fft(windata, n=nfft, axis=-1, workers=-1)
+
+    # Keeps only the desired part of the spectrum.
+    freqs = fft.fftfreq(nfft, 1 / data.info['sfreq'])
+    findex = (band[0] <= freqs) & (freqs <= band[1])
+    fdata = fdata[..., findex]
+    freqs = freqs[findex]
+    nfreq = fdata.shape[-1]
+
+    # Gets the per-window cross-spectra.
+    cross = fdata[..., None, :] * fdata[..., None, :, :].conj()
+
+    # Gets the average cross- and auto-spectra.
+    mcross = np.mean(cross, axis=0)
+    mauto = mcross[..., range(nnode), range(nnode), :]
+
+    # Gets the coherency values.
+    num = mcross
+    den = np.sqrt(mauto[:, None, :, :] * mauto[:, :, None, :])
+    coh = num / den
+
+    # Recovers the original shape of the data.
+    coh = coh.reshape(shape[:-2] + (nnode, nnode, -1))
+
+    # Calculates the magnitude-squared coherence and its corrected imaginary counterpart.
+    tiny = np.finfo(rawdata.dtype).tiny
+    mscoh = np.abs(coh) ** 2
+    icoh = np.imag(coh)
+    rcoh = np.real(coh)
+    cicoh = abs(icoh / np.sqrt(np.maximum(1 - rcoh * rcoh, tiny)))
+
+    # Forces the diagonal of corrected imaginary coherence to 0.
+    diag = np.diag_indices(nnode)
+    cicoh[..., diag[0], diag[1], :] = 0
+
+    # Averages across frequencies, if requested.
+    if faverage:
+        mscoh = mscoh.mean(axis=-1, keepdims=True)
+        cicoh = cicoh.mean(axis=-1, keepdims=True)
+        freqs = freqs.mean(axis=0, keepdims=True)
+        nfreq = 1
+
+    # Flattens the connectivity matrix.
+    mscoh = mscoh.reshape((nrep, nnode * nnode, nfreq))
+    cicoh = cicoh.reshape((nrep, nnode * nnode, nfreq))
+
+    # Defines the upper diagonal in the flattened data.
+    triu = np.triu_indices(nnode, k=0)
+    triu = np.ravel_multi_index(triu, (nnode, nnode))
+
+    # Keeps only the upper triangular.
+    mscoh = mscoh[:, triu, 0]
+    cicoh = cicoh[:, triu, 0]
+
+    # # Creates the epoched connectivity objects.
+    # mscoh = mne_connectivity.EpochSpectralConnectivity(
+    #     data=mscoh,
+    #     n_nodes=nnode,
+    #     freqs=freqs,
+    #     indices='symmetric',
+    #     names=nodes,
+    #     method='Magnitude-squared coherence',
+    #     n_epochs_used=nrep)
+    #
+    # cicoh = mne_connectivity.EpochSpectralConnectivity(
+    #     data=cicoh,
+    #     n_nodes=nnode,
+    #     freqs=freqs,
+    #     indices='symmetric',
+    #     names=nodes,
+    #     method='Corrected imaginary part of coherence',
+    #     n_epochs_used=nrep)
+
+    # Averages the epochs connectivity, if requested.
+    if average:
+        mscoh = np.average(mscoh, axis=0)
+        cicoh = np.average(cicoh, axis=0)
+
+    # Returns the estimated connectivity.
+    return mscoh, cicoh
+
+
+def aec(data, ortho=False, band=None, decimate=False, padding=None, smoothing=0, continuous=False, average=True,
+        single=False):
+    # Checks whether the data is a valid MNE object.
+    # For now, it only works with sensor-space data.
+    if not (isinstance(data, mnetools.mnevalid)):
+        raise TypeError('Unsupported data type.')
+
+    # Checks the input.
+    if (band is None) and np.isreal(data._data).all():
+        raise TypeError('No filter provided.')
+
+    # Makes a copy of the input to work with.
+    data = data.copy()
+
+    # Filters the data, if required.
+    if band is not None:
+
+        # Uses the provided padding, if any.
+        if padding is not None:
+            padding = padding * data.info['sfreq']
+            padding = np.floor(padding).astype(int)
+
+        # Otherwise tries to get the padding from the MNE object.
+        elif hasattr(data, 'padding'):
+            padding = data.padding * data.info['sfreq']
+            padding = np.floor(padding).astype(int)
+
+        # Otherwise assumes that the padding is the negative time.
+        else:
+            # print ( 'Assuming that padding is equal to negative time.' )
+
+            padding = data.time_as_index(0)[0]
+
+        # Defines the filter.
+        num = signal.firwin(padding, band, fs=data.info['sfreq'], window='hamming', pass_zero='bandpass')
+
+        # Filters the epoched data using Hilbert filtering.
+        data = mnetools.filtfilt(data, num=num, hilbert=True)
+
+        '''
+        # Removes the padding.
+        if padding and padding > 0:
+            tmin    = data.times [  padding ]
+            tmax    = data.times [ -padding ]
+            data    = data.crop ( tmin = tmin, tmax = tmax, include_tmax = False )
+        '''
+
+        # Decimates the data, if requested.
+        if decimate:
+            # Decimates the data to the optimal sampling rate (2.1 times the maximum frequency).
+            ratio = np.floor(data.info['sfreq'] / (2.1 * band[1])).astype(int)
+            data = mnetools.decimate(data, ratio)
+
+            # Corrects the padding.
+            padding = (padding / ratio).astype(int)
+
+    # Extracts the raw data.
+    rawdata = data.get_data()
+
+    # Transforms the data into single precision, if requested.
+    if single:
+        rawdata = rawdata.astype(np.float32)
+
+    # Defines the minimum possible value.
+    tiny = np.finfo(rawdata.dtype).eps
+
+    # Defines the padding and the smoothing in samples.
+    spadd = padding
+    ssmooth = round(smoothing * data.info['sfreq'])
+
+    # Shortens the padding, if possible.
+    # if spadd > math.ceil(ssmooth / 2):
+    #     # Calculates the extra padding.
+    #     xspadd = spadd - math.ceil(ssmooth / 2)
+    #
+    #     # Removes the extra padding.
+    #     rawdata = rawdata[..., xspadd: -xspadd]
+    #
+    #     # Updates the value of the padding.
+    #     spadd = math.ceil(ssmooth / 2)
+
+    # Gets the metadata.
+    nsamp = rawdata.shape[-1]
+    nchan = rawdata.shape[-2]
+
+    # In the current implementation, the nodes are channels.
+    nodes = data.ch_names
+    nnode = nchan
+
+    # Rewrites as channels x repetitions x samples.
+    rawdata = rawdata.reshape([-1, nnode, nsamp])
+    rawdata = np.swapaxes(rawdata, 0, 1)
+    nrep = rawdata.shape[1]
+
+    # Initializes the AEC matrices.
+    aecov = np.zeros((nnode, nnode, nrep))
+    aecovlc = np.zeros((nnode, nnode, nrep))
+    nreg = np.zeros((nnode, nnode, nrep))
+
+    # Splits in real and imaginary parts.
+    rawreal = np.real(rawdata)
+    rawimag = np.imag(rawdata)
+
+    # Gets the envelope of the signal.
+    rawenv = np.abs(rawdata)
+
+    # Smooths the envelope and removes the padding.
+    # rawenv = auxaec.get_mas(rawenv, ssmooth, spadd)
+
+    # Removes the padding.
+    rawenv  = rawenv [..., padding : -padding ]
+
+    # Centers the envelope (as continuous or per repetitions).
+    if continuous:
+        rawenv  = rawenv - rawenv.mean ( axis = -1, keepdims = True ).mean ( axis = -2, keepdims = True )
+        # rawenv = auxaec.demean2(rawenv)
+    else:
+        rawenv  = rawenv - rawenv.mean ( axis = -1, keepdims = True )
+        # rawenv = auxaec.demean(rawenv)
+
+    # Gets the AE covariance by matrix multiplication.
+    for irep in range(nrep):
+        aecov[:, :, irep] = np.inner(rawenv[:, irep, :], rawenv[:, irep, :])
+
+    # Gets the norm per node and repetition.
+    dummy   = rawenv * rawenv
+    nraw    = dummy.sum ( axis = -1 )
+    # nraw = auxaec.get_norm(rawenv)
+
+    # Otherwise orthogonalizes pairwise.
+    if ortho is True:
+
+        # Concatenates all the repetitions to estimate the projections.
+        rawconc = rawreal[..., spadd: -spadd or None].reshape([nnode, -1])
+        rawconc = rawconc - rawconc.mean(axis=-1, keepdims=True)
+
+        # Calculates the betas of the regression.
+        # proj    = np.inner ( rawconc, rawconc )
+        proj = rawconc.dot(rawconc.T)
+        betas = proj / np.diag(proj)
+
+        # Goes through each signal.
+        for inode in range(nnode):
+
+            # Removes the projection of the current signal from all the others.
+            regreal = rawreal - betas[:, [inode], None] * rawreal[[inode], :, :]
+            regimag = rawimag - betas[:, [inode], None] * rawimag[[inode], :, :]
+            # regreal = auxaec.get_lc ( rawreal, rawreal [ inode, :, : ], betas [ :, inode ] )
+            # regimag = auxaec.get_lc ( rawimag, rawimag [ inode, :, : ], betas [ :, inode ] )
+
+            # Gets the envelope.
+            # regenv = auxaec.get_abs(regreal, regimag)
+            regenv = np.sqrt(regreal ** 2 + regimag ** 2)
+
+            # Smooths the envelope and removes the padding.
+            # regenv = auxaec.get_mas(regenv, ssmooth, spadd)
+
+            # Removes the padding.
+            regenv  = regenv [..., spadd : -spadd ]
+
+            # Centers the envelope (as continuous or per repetitions).
+            if continuous:
+                regenv  = regenv - regenv.mean ( axis = -1, keepdims = True ).mean ( axis = -2, keepdims = True )
+                # regenv = auxaec.demean2(regenv)
+            else:
+                regenv  = regenv - regenv.mean ( axis = -1, keepdims = True )
+                # regenv = auxaec.demean(regenv)
+
+            # Gets the AECov per repetition by matrix multiplication.
+            dummy   = rawenv [ [ inode ], :, : ] * regenv
+            aecovlc [ inode, :, : ] = dummy.sum ( axis = -1 )
+            # aecovlc[inode, :, :] = auxaec.get_dot(regenv, rawenv[inode, :, :])
+
+            # Gets the norm per node and repetition.
+            dummy   = regenv * regenv
+            nreg [ inode, :, : ] = dummy.sum ( axis = -1 )
+            # nreg[inode, :, :] = auxaec.get_norm(regenv)
+
+    # If requested, simulates continuous data.
+    if continuous:
+
+        # Gets the covariance and norms of the continuous data.
+        aecov = aecov.sum(axis=-1)
+        aecovlc = aecovlc.sum(axis=-1)
+        nraw = nraw.sum(axis=-1)
+        nreg = nreg.sum(axis=-1)
+
+        # Calculates the AEC of the continuous data as the normalized covariance.
+        aec = aecov / (tiny * tiny + np.sqrt(nraw[:, None] * nraw))
+        aeclc = aecovlc / (tiny * tiny + np.sqrt(nraw[:, None] * nreg))
+
+        # Makes the leakage-corrected AEC symmetric.
+        aeclc = (aeclc + aeclc.T) / 2
+
+        # Sets the number of epochs to 1.
+        nrep = 1
+
+    # Otherwise treats each trial individually.
+    else:
+
+        # Calculates the AEC as the normalized covariance.
+        aec = aecov / (tiny * tiny + np.sqrt(nraw[:, None, :] * nraw[None, :, :]))
+        aeclc = aecovlc / (tiny * tiny + np.sqrt(nraw[:, None, :] * nreg))
+
+        # Reshapes the AEC matrices as repetitions by nodes.
+        aec = np.swapaxes(aec, -1, 0)
+        aeclc = np.swapaxes(aeclc, -1, 0)
+
+        # Makes the leakage-corrected AEC symmetric.
+        aeclc = (aeclc + np.swapaxes(aeclc, -2, -1)) / 2
+
+    # Forces the diagonal of the leakage-corrected AEC to be 0.
+    diag = np.diag_indices(nnode)
+    aeclc[..., diag[0], diag[1]] = 0
+
+    # Flattens the connectivity matrices.
+    aec = aec.reshape((nrep, nnode * nnode))
+    aeclc = aeclc.reshape((nrep, nnode * nnode))
+
+    # Defines the upper diagonal in the flattened data.
+    triu = np.triu_indices(nnode, k=0)
+    triu = np.ravel_multi_index(triu, (nnode, nnode))
+
+    # Keeps only the upper triangular.
+    aec = aec[:, triu]
+    aeclc = aeclc[:, triu]
+
+    # # Creates the epoched connectivity objects.
+    # aec = mne_connectivity.EpochConnectivity(
+    #     data=aec,
+    #     n_nodes=nnode,
+    #     indices='symmetric',
+    #     names=nodes,
+    #     method='Temporal AEC',
+    #     n_epochs_used=nrep)
+    #
+    # aeclc = mne_connectivity.EpochConnectivity(
+    #     data=aeclc,
+    #     n_nodes=nnode,
+    #     indices='symmetric',
+    #     names=nodes,
+    #     method='Temporal leakage-corrected AEC',
+    #     n_epochs_used=nrep)
+
+    # Averages the epochs connectivity, if requested.
+    if average:
+        aec = np.average(aec, axis=0)
+        aeclc = np.average(aeclc, axis=0)
+
+    # Returns the estimated connectivity.
+    return aec, aeclc
+
+
+
+
+
 
 

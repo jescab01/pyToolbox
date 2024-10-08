@@ -26,26 +26,22 @@ def timeseriesPlot(signals, timepoints, regionLabels, folder="figures", title=No
         plotly.offline.iplot(fig)
 
 
-def epochingTool(signals, epoch_length, samplingFreq, msg="", verbose=True):
+def epochingTool(data, window, step, samplingFreq, msg="", verbose=True):
     """
     Epoch length in seconds; sampling frequency in Hz
     """
+
     tic = time.time()
-    nEpochs = math.trunc(len(signals[0]) / (epoch_length * samplingFreq))
-    # Cut input signals to obtain equal sized epochs
-    signalsCut = signals[:, :nEpochs * epoch_length * samplingFreq]
-    epochedSignals = np.ndarray((nEpochs, len(signals), epoch_length * samplingFreq))
 
     if verbose:
         print("Epoching %s" % msg, end="")
 
-    for channel in range(len(signalsCut)):
-        split = np.array_split(signalsCut[channel], nEpochs)
-        for i in range(len(split)):
-            epochedSignals[i][channel] = split[i]
+    window_, step_ = int(window*samplingFreq), int(step*samplingFreq)
+
+    epochedSignals = [data[:, w:w + window_] for w in np.arange(0, data.shape[-1] - window_, step_, 'int')]
 
     if verbose:
-        print(" - %0.3f seconds.\n" % (time.time() - tic,))
+        print(" - %0.2e seconds.\n" % (time.time() - tic,))
 
     return epochedSignals
 
