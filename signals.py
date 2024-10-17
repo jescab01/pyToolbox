@@ -44,7 +44,7 @@ def epochingTool(data, window, step, samplingFreq, msg="", verbose=True):
     if verbose:
         print(" - %0.2e seconds.\n" % (time.time() - tic,))
 
-    return epochedSignals
+    return np.array(epochedSignals)
 
 
 def bandpassFIRfilter(signals, lowcut, highcut, windowtype, samplingRate, times=None, plot="OFF"):

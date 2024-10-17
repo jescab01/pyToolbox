@@ -48,7 +48,7 @@ def fc(signals, samplingFreq=None, lowcut=8, highcut=12, measure="PLV", ef=None,
 
         if not ef:
             filterSignals = filter.filter_data(signals, samplingFreq, lowcut, highcut, verbose=verbose)
-            efSignals = epochingTool(filterSignals, 4, samplingFreq, "signals", verbose=verbose)
+            efSignals = epochingTool(filterSignals, 4, 4, samplingFreq, "signals", verbose=verbose)
 
             # Obtain Analytical signal
             efPhase, efEnvelope = [], []
@@ -180,8 +180,8 @@ def dynamic_fc(data, samplingFreq, transient, window, step, measure="PLV", plot=
             # timeseriesPlot(data, raw_time, regionLabels)
             # plotConversions(data[:, :len(efSignals[0])], efSignals, efPhase, efEnvelope, band="alpha", regionLabels=regionLabels)
 
-            ef = "efPhase" if measure == "PLV" else "efEnvelope"
-            matrices_fc.append(fc(efPhase, ef=ef, measure=measure, verbose=verbose))
+            efData, ef = (efPhase, "efPhase") if measure in ["PLV", "PLI"] else (efEnvelope, "efEnvelope")
+            matrices_fc.append(fc(efData, ef=ef, measure=measure, verbose=verbose))
 
 
         dFC_matrix = np.zeros((len(matrices_fc), len(matrices_fc)))
@@ -441,7 +441,6 @@ def plv(data, band=None, padding=None, average=True):
         # Otherwise assumes that the padding is the negative time.
         else:
             # print ( 'Assuming that padding is equal to negative time.' )
-
             padding = data.time_as_index(0)[0]
 
         # Defines the filter.
@@ -1170,116 +1169,23 @@ def crossfreq_aec(data, bands=None, padding=None, continuous=False):
                 raw1env = np.abs(rawdata1)[..., padding : -padding ]
                 raw2env = np.abs(rawdata2)[..., padding : -padding ]
 
-                aec = np.array([[[np.corrcoef(env1, env2)[0, 1] for env1 in raw1env[:, r, :]]
-                                 for env2 in raw2env[:, r, :]] for r in range(nrep)])
+                # Centers the envelope (as continuous or per repetitions).
+                if continuous:
+                    raw1env = raw1env - raw1env.mean(axis=-1, keepdims=True).mean(axis=-2, keepdims=True)
+                    raw2env = raw2env - raw2env.mean(axis=-1, keepdims=True).mean(axis=-2, keepdims=True)
+                    # rawenv = auxaec.demean2(rawenv)
+                else:
+                    raw1env = raw1env - raw1env.mean(axis=-1, keepdims=True)
+                    raw2env = raw2env - raw2env.mean(axis=-1, keepdims=True)
+                    # rawenv = auxaec.demean(rawenv)
+
+                aec = np.array([[[np.corrcoef(env1, env2)[0, 1] for env2 in raw2env[:, r, :]]
+                                 for env1 in raw1env[:, r, :]] for r in range(nrep)])
 
                 # Average our trials
                 aec = np.average(aec, axis=0)
 
                 cross_aec[b1*nnode:b1*nnode+nnode, b2*nnode:b2*nnode+nnode] = aec
-
-
-
-                # cf_res.append([str(bands[b1]), str(bands[b2]), aec])
-                
-                # # Defines the minimum possible value.
-                # tiny = np.finfo(rawdata.dtype).eps
-                #
-                # # Defines the padding and the smoothing in samples.
-                # spadd = padding
-                #
-                # # Gets the metadata.
-                # nsamp = rawdata.shape[-1]
-                # nchan = rawdata.shape[-2]
-                #
-                # # In the current implementation, the nodes are channels.
-                # nodes = data.ch_names
-                # nnode = nchan
-                #
-                # # Rewrites as channels x repetitions x samples.
-                # rawdata = rawdata.reshape([-1, nnode, nsamp])
-                # rawdata = np.swapaxes(rawdata, 0, 1)
-                # nrep = rawdata.shape[1]
-                #
-                # # Initializes the AEC matrices.
-                # aecov = np.zeros((nnode, nnode, nrep))
-                # aecovlc = np.zeros((nnode, nnode, nrep))
-                # nreg = np.zeros((nnode, nnode, nrep))
-                #
-                # # Splits in real and imaginary parts.
-                # rawreal = np.real(rawdata)
-                # rawimag = np.imag(rawdata)
-                #
-                # # Gets the envelope of the signal.
-                # rawenv = np.abs(rawdata)
-                #
-                # # Smooths the envelope and removes the padding.
-                # # rawenv = auxaec.get_mas(rawenv, ssmooth, spadd)
-                #
-                # # Removes the padding.
-                # rawenv = rawenv[..., padding: -padding]
-                #
-                # # Centers the envelope (as continuous or per repetitions).
-                # if continuous:
-                #     rawenv = rawenv - rawenv.mean(axis=-1, keepdims=True).mean(axis=-2, keepdims=True)
-                #     # rawenv = auxaec.demean2(rawenv)
-                # else:
-                #     rawenv = rawenv - rawenv.mean(axis=-1, keepdims=True)
-                #     # rawenv = auxaec.demean(rawenv)
-                #
-                # # Gets the AE covariance by matrix multiplication.
-                # for irep in range(nrep):
-                #     aecov[:, :, irep] = np.inner(rawenv[:, irep, :], rawenv[:, irep, :])
-                #
-                # # Gets the norm per node and repetition.
-                # dummy = rawenv * rawenv
-                # nraw = dummy.sum(axis=-1)
-                # # nraw = auxaec.get_norm(rawenv)
-                #
-                #
-                # # If requested, simulates continuous data.
-                # if continuous:
-                #
-                #     # Gets the covariance and norms of the continuous data.
-                #     aecov = aecov.sum(axis=-1)
-                #     aecovlc = aecovlc.sum(axis=-1)
-                #     nraw = nraw.sum(axis=-1)
-                #     nreg = nreg.sum(axis=-1)
-                #
-                #     # Calculates the AEC of the continuous data as the normalized covariance.
-                #     aec = aecov / (tiny * tiny + np.sqrt(nraw[:, None] * nraw))
-                #     aeclc = aecovlc / (tiny * tiny + np.sqrt(nraw[:, None] * nreg))
-                #
-                #     # Makes the leakage-corrected AEC symmetric.
-                #     aeclc = (aeclc + aeclc.T) / 2
-                #
-                #     # Sets the number of epochs to 1.
-                #     nrep = 1
-                #
-                # # Otherwise treats each trial individually.
-                # else:
-                #
-                #     # Calculates the AEC as the normalized covariance.
-                #     aec = aecov / (tiny * tiny + np.sqrt(nraw[:, None, :] * nraw[None, :, :]))
-                #     aeclc = aecovlc / (tiny * tiny + np.sqrt(nraw[:, None, :] * nreg))
-                #
-                #     # Reshapes the AEC matrices as repetitions by nodes.
-                #     aec = np.swapaxes(aec, -1, 0)
-                #
-                # # Flattens the connectivity matrices.
-                #
-                #
-                # # Defines the upper diagonal in the flattened data.
-                # triu = np.triu_indices(nnode, k=0)
-                # triu = np.ravel_multi_index(triu, (nnode, nnode))
-                #
-                # # Keeps only the upper triangular.
-                # aec = aec[:, triu]
-                #
-                # cf_results.append([str(bands[b1]), str(bands[b2])] + aeclc.tolist())
-
-    # # Fill the super-matrix
-    # cross_aec = cross_aec + cross_aec.T - np.diag(np.diag(cross_aec))
 
     # Returns the estimated connectivity.
     return cross_aec
