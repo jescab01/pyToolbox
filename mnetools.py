@@ -235,13 +235,13 @@ def signal_filtfilt(data, num=1, den=1, hilbert=False):
         chunk = paddata[:, offset: offset + chlen + 2 * order].copy()
 
         # Takes the Fourier transform of the chunk.
-        Fchunk = fft.fft(chunk, n=nfft, axis=-1, norm=None, workers=-1)
+        Fchunk = fft.fft(chunk, n=nfft, axis=-1, norm=None, workers=1)  # Orig -1
 
         # Applies the filter.
         Fchunk = Fchunk * Ffilter
 
         # Recovers the filtered chunk.
-        chunk = fft.ifft(Fchunk, n=nfft, axis=-1, workers=-1)
+        chunk = fft.ifft(Fchunk, n=nfft, axis=-1, workers=1)
 
         # Gets only the real part, if required.
         if real and not hilbert:
