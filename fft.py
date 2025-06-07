@@ -8,7 +8,120 @@ import plotly.offline
 from pyToolbox.signals import epochingTool
 
 
-# FFT
+## Postdoc functions - from 03/2025 @Jescab01
+def FFT(signals, simLength, freq_range=[0.5, 60], norm=False):
+    """
+
+    :param signals: channels x timepoints
+    :param simLength: in seconds
+    :param norm: do you want normalized spectra?
+    :param freq_range: Exclude some frequencies from analysis?
+    :return:
+    """
+
+    if signals.ndim == 1:
+
+        fft = abs(np.fft.fft(signals))  # FFT for each channel signal
+        fft = fft[range(int(len(signals) / 2))]  # Select just positive side of the symmetric FFT
+        freqs = np.arange(len(signals) / 2)
+        freqs = freqs / simLength  # simLength (s)
+
+        # Filter out undesired frequencies
+        fft = fft[(freqs > freq_range[0]) & (freqs < freq_range[1])]
+        freqs = freqs[(freqs > freq_range[0]) & (freqs < freq_range[1])]
+
+        if norm:
+            # fft = fft / sum(fft)
+            fft_norm = (fft - min(fft)) / (max(fft) - min(fft))
+            return fft, freq, fft_norm
+        else:
+            return np.asarray(fft), freqs
+
+    elif signals.ndim == 2:
+        ffts, ffts_norm = [], []
+
+        for i in range(len(signals)):
+            fft = abs(np.fft.fft(signals[i]))  # FFT for each channel signal
+            fft = fft[range(int(len(signals[i]) / 2))]  # Select just positive side of the symmetric FFT
+            freqs = np.arange(len(signals[i]) / 2)
+            freqs = freqs / simLength  # simLength (s)
+
+            fft = fft[(freqs > freq_range[0]) & (freqs < freq_range[1])]  # remove undesired frequencies from peak analysis
+            freqs = freqs[(freqs > freq_range[0]) & (freqs < freq_range[1])]
+
+            ffts.append(fft)
+
+            if norm:
+                # fft = fft / sum(fft)
+                fft = (fft - min(fft))/(max(fft) - min(fft))
+
+            ffts_norm.append(fft)
+
+        if norm:
+            return np.asarray(ffts), freqs, np.asarray(ffts_norm)
+        else:
+            return np.asarray(ffts), freqs
+
+    else:
+        print("Array should be an array with shape: channels x timepoints.")
+
+
+def FFTpeaks(signals, simLength, freq_range=[0.5, 60]):
+    """
+
+    :param signals: channels x timepoints
+    :param simLength: in seconds
+    :param norm: do you want normalized spectra?
+    :param freq_range: Exclude some frequencies from analysis?
+    :return:
+    """
+
+    if signals.ndim == 1:
+
+        fft = abs(np.fft.fft(signals))  # FFT for each channel signal
+        fft = fft[range(int(len(signals) / 2))]  # Select just positive side of the symmetric FFT
+        freqs = np.arange(len(signals) / 2)
+        freqs = freqs / simLength  # simLength (s)
+
+        # Filter out undesired frequencies
+        fft = fft[(freqs > freq_range[0]) & (freqs < freq_range[1])]
+        freqs = freqs[(freqs > freq_range[0]) & (freqs < freq_range[1])]
+
+        # Guided by max fft
+        peak = freqs[np.where(fft == max(fft))][0]
+        module = fft[np.where(fft == max(fft))][0]
+        band_module = scipy.integrate.simpson(fft[(peak - 2 < freqs) & (freqs < peak + 2)])  # integral
+
+        return peak, module, band_module
+
+    elif signals.ndim == 2:
+
+        peaks, modules, band_modules = [], [], []
+
+        for i in range(len(signals)):
+            fft = abs(np.fft.fft(signals[i]))  # FFT for each channel signal
+            fft = fft[range(int(len(signals[i]) / 2))]  # Select just positive side of the symmetric FFT
+            freqs = np.arange(len(signals[i]) / 2)
+            freqs = freqs / simLength  # simLength (s)
+
+            fft = fft[(freqs > freq_range[0]) & (freqs < freq_range[1])]  # remove undesired frequencies from peak analysis
+            freqs = freqs[(freqs > freq_range[0]) & (freqs < freq_range[1])]
+
+            # Guided by max fft
+            peak = freqs[np.where(fft == max(fft))][0]
+            peaks.append(peak)
+            modules.append(fft[np.where(fft == max(fft))][0])
+            band_modules = scipy.integrate.simpson(fft[(peak - 2 < freqs) & (freqs < peak + 2)])  # integral
+
+        return peaks, modules, band_modules
+
+    else:
+        print("Array should be an array with shape: channels x timepoints.")
+
+
+
+
+# Predoc functions - old.
 def multitapper(signals, samplingFreq, regionLabels, epoch_length=4, ntapper=4, smoothing=0.5, peaks=False,
                 plot=False, folder="figures/", title="", mode="html"):
 
@@ -194,60 +307,4 @@ def FFTplot(signals, simLength, regionLabels, folder="figures", title=None, mode
     elif mode == "inline":
         plotly.offline.iplot(fig)
 
-
-def FFTpeaks(signals, simLength, transient, samplingFreq, IAF=None, curves=False, norm=False, freq_range=[0.5, 60]):
-    """
-
-    :param signals: channels x timepoints
-    :param simLength: in miliseconds
-    :param transient: if apply, discarded simulation time
-    :param samplingFreq:
-    :param IAF: to calculate IAF+/-2 band power
-    :param curves: Save curves?
-    :param norm: do you want normalized spectra?
-    :param freq_range: Exclude some frequencies from analysis?
-    :return:
-    """
-
-    if signals.ndim != 2:
-        print("Array should be an array with shape: channels x timepoints.")
-
-    else:
-        peaks, modules, band_modules, ffts, ffts_norm = [], [], [], [], []
-
-        for i in range(len(signals)):
-            fft = abs(np.fft.fft(signals[i]))  # FFT for each channel signal
-            fft = fft[range(int(len(signals[i]) / 2))]  # Select just positive side of the symmetric FFT
-            freqs = np.arange(len(signals[i]) / 2)
-            freqs = freqs / ((simLength - transient) / samplingFreq)  # simLength (ms) / 1000 -> segs
-
-            fft = fft[(freqs > freq_range[0]) & (freqs < freq_range[1])]  # remove undesired frequencies from peak analysis
-            freqs = freqs[(freqs > freq_range[0]) & (freqs < freq_range[1])]
-
-            if not IAF:
-                IAF = freqs[np.where(fft == max(fft))][0]
-
-            # Guided by max fft
-            peaks.append(freqs[np.where(fft == max(fft))][0])
-            modules.append(fft[np.where(fft == max(fft))][0])
-
-            # Guided by IAF
-            band_modules.append(scipy.integrate.simpson(fft[(IAF-2 < freqs) & (freqs < IAF+2)]))  # Alpha band integral
-
-            ffts.append(fft)
-
-            if norm:
-                # fft = fft / sum(fft)
-                fft = (fft - min(fft))/(max(fft) - min(fft))
-
-            ffts_norm.append(fft)
-
-    if curves and norm:
-        return np.asarray(peaks), np.asarray(modules), np.asarray(band_modules), np.asarray(ffts), freqs, np.asarray(ffts_norm)
-
-    elif curves:
-        return np.asarray(peaks), np.asarray(modules), np.asarray(band_modules), np.asarray(ffts), freqs
-
-    else:
-        return np.asarray(peaks), np.asarray(modules), np.asarray(band_modules)
 

@@ -495,17 +495,17 @@ def plv(data, band=None, padding=None, average=True):
     diag = np.diag_indices(nnode)
     ciplv[..., diag[0], diag[1]] = 0
 
-    # Flattens the connectivity matrices.
-    plv = plv.reshape((nrep, nnode * nnode))
-    ciplv = ciplv.reshape((nrep, nnode * nnode))
+    # # Flattens the connectivity matrices.
+    # plv = plv.reshape((nrep, nnode * nnode))
+    # ciplv = ciplv.reshape((nrep, nnode * nnode))
 
-    # Defines the upper diagonal in the flattened data.
-    triu = np.triu_indices(nnode, k=0)
-    triu = np.ravel_multi_index(triu, (nnode, nnode))
-
-    # Keeps only the upper triangular.
-    plv = plv[:, triu]
-    ciplv = ciplv[:, triu]
+    # # Defines the upper diagonal in the flattened data.
+    # triu = np.triu_indices(nnode, k=0)
+    # triu = np.ravel_multi_index(triu, (nnode, nnode))
+    #
+    # # Keeps only the upper triangular.
+    # plv = plv[:, triu]
+    # ciplv = ciplv[:, triu]
 
     # # Creates the epoched connectivity objects.
     # plv = mne_connectivity.EpochConnectivity(
@@ -656,17 +656,17 @@ def coh(data, band=None, padding=None, average=True, faverage=True):
         freqs = freqs.mean(axis=0, keepdims=True)
         nfreq = 1
 
-    # Flattens the connectivity matrix.
-    mscoh = mscoh.reshape((nrep, nnode * nnode, nfreq))
-    cicoh = cicoh.reshape((nrep, nnode * nnode, nfreq))
+    # # Flattens the connectivity matrix.
+    # mscoh = mscoh.reshape((nrep, nnode * nnode, nfreq))
+    # cicoh = cicoh.reshape((nrep, nnode * nnode, nfreq))
 
-    # Defines the upper diagonal in the flattened data.
-    triu = np.triu_indices(nnode, k=0)
-    triu = np.ravel_multi_index(triu, (nnode, nnode))
-
-    # Keeps only the upper triangular.
-    mscoh = mscoh[:, triu, 0]
-    cicoh = cicoh[:, triu, 0]
+    # # Defines the upper diagonal in the flattened data.
+    # triu = np.triu_indices(nnode, k=0)
+    # triu = np.ravel_multi_index(triu, (nnode, nnode))
+    #
+    # # Keeps only the upper triangular.
+    # mscoh = mscoh[:, triu, 0]
+    # cicoh = cicoh[:, triu, 0]
 
     # # Creates the epoched connectivity objects.
     # mscoh = mne_connectivity.EpochSpectralConnectivity(
@@ -911,17 +911,17 @@ def aec(data, ortho=False, band=None, decimate=False, padding=None, smoothing=0,
     diag = np.diag_indices(nnode)
     aeclc[..., diag[0], diag[1]] = 0
 
-    # Flattens the connectivity matrices.
-    aec = aec.reshape((nrep, nnode * nnode))
-    aeclc = aeclc.reshape((nrep, nnode * nnode))
+    # # Flattens the connectivity matrices.
+    # aec = aec.reshape((nrep, nnode * nnode))
+    # aeclc = aeclc.reshape((nrep, nnode * nnode))
 
-    # Defines the upper diagonal in the flattened data.
-    triu = np.triu_indices(nnode, k=0)
-    triu = np.ravel_multi_index(triu, (nnode, nnode))
-
-    # Keeps only the upper triangular.
-    aec = aec[:, triu]
-    aeclc = aeclc[:, triu]
+    # # Defines the upper diagonal in the flattened data.
+    # triu = np.triu_indices(nnode, k=0)
+    # triu = np.ravel_multi_index(triu, (nnode, nnode))
+    #
+    # # Keeps only the upper triangular.
+    # aec = aec[:, triu]
+    # aeclc = aeclc[:, triu]
 
     # Averages the epochs connectivity, if requested.
     if average:
